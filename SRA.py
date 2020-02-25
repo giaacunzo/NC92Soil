@@ -6,6 +6,7 @@ import sys
 import SRALibrary as SRALib
 
 
+# noinspection PyCallByClass
 class SRAApp(QMainWindow, Ui_MainWindow):
 
     def __init__(self):
@@ -14,6 +15,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # Inizializzazione attributi principali
         self.curveDB = dict()
         self.userModified = True
+        self.inputMotion = ''
 
         self.setupUi(self)
         self.assignWidgets()
@@ -37,6 +39,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_removeProfile.clicked.connect(self.removeRow)
         self.tableWidget_Profile.cellChanged.connect(self.profileChanged)
         self.pushButton_drawProfile.clicked.connect(self.drawProfile)
+        self.pushButton_loadTH.clicked.connect(self.loadTH)
+        self.pushButton_run.clicked.connect(self.runAnalysis)
 
     def addRow(self):
         senderName = self.sender().objectName()
@@ -90,6 +94,41 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentDepth = float(self.sender().item(riga-1, 0).text()) + float(self.sender().item(riga-1, 1).text())
             self.sender().setItem(riga, 0, QTableWidgetItem(str(currentDepth)))
         self.userModified = True
+
+    def loadTH(self):
+        timeHistoryFile = QFileDialog.getOpenFileName(self, caption="Choose input motion file")[0]
+        if timeHistoryFile == '':
+            return None
+
+        try:
+            currentFS = float(self.lineEdit_FS.text())
+        except ValueError:
+            currentFS = None
+
+        currentUnits = self.comboBox_Units.currentText()
+
+        inputMotion, measureUnits = SRALib.loadTH(timeHistoryFile, currentFS, currentUnits)
+        self.lineEdit_FS.setText(str(1/inputMotion.time_step))
+        self.comboBox_Units.setCurrentText(measureUnits)
+
+        if not getattr(self.graphWidget_TH, 'axes', False):
+            self.graphWidget_TH.axes = self.graphWidget_TH.figure.add_subplot(111)
+
+        SRALib.drawTH(inputMotion, self.graphWidget_TH.axes)
+        self.graphWidget_TH.draw()
+        self.inputMotion = inputMotion
+
+    def runAnalysis(self):
+        if self.checkBox_autoDiscretize.isChecked():
+            currentMaxFreq = float(self.lineEdit_maxFreq.text())
+            currentWaveLength = float(self.lineEdit_waveLength.text())
+        else:
+            currentMaxFreq = currentWaveLength = -1
+
+        analysisDB = {'CurveDB': self.curveDB, 'Dicretization': [currentMaxFreq, currentWaveLength],
+                      'Bedrock': [self.lineEdit_bedWeight.text(), self.lineEdit_bedVelocity.text(),
+                                  self.lineEdit_bedDamping.text()]}
+        SRALib.runAnalysis(self.inputMotion, self.tableWidget_Soil, self.tableWidget_Profile, analysisDB)
 
 
 if __name__ == "__main__":
