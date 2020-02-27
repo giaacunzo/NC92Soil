@@ -1,9 +1,12 @@
+from warnings import filterwarnings
+filterwarnings('ignore', category=UserWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
 import numpy as np
 import sys
 import SRALibrary as SRALib
+import pandas as pd
 
 
 # noinspection PyCallByClass
@@ -125,10 +128,104 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             currentMaxFreq = currentWaveLength = -1
 
-        analysisDB = {'CurveDB': self.curveDB, 'Dicretization': [currentMaxFreq, currentWaveLength],
+        soilList, profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)
+
+        outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
+                      self.checkBox_outStrain.isChecked()]
+        outputParam = [float(x.text())
+                       for x in [self.lineEdit_RSDepth, self.lineEdit_accDepth, self.lineEdit_strainDepth]]
+        LECalcOptions = [float(x.text())
+                         for x in [self.lineEdit_strainRatio, self.lineEdit_maxTol, self.lineEdit_maxIter]]
+        checkPreliminari = self.preAnalysisChecks(soilList, profileList, outputList)
+        if checkPreliminari is None:
+            return None
+
+        analysisDB = {'CurveDB': self.curveDB, 'Discretization': [currentMaxFreq, currentWaveLength],
                       'Bedrock': [self.lineEdit_bedWeight.text(), self.lineEdit_bedVelocity.text(),
-                                  self.lineEdit_bedDamping.text()]}
-        SRALib.runAnalysis(self.inputMotion, self.tableWidget_Soil, self.tableWidget_Profile, analysisDB)
+                                  self.lineEdit_bedDamping.text()], 'OutputList': outputList,
+                      'OutputParam': outputParam, 'LECalcOptions': LECalcOptions}
+
+        excelFile = QFileDialog.getSaveFileName(self, caption="Save the output file as",
+                                                filter="*.xlsx")[0]
+        if excelFile == '':
+            return None
+
+        waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, 4)
+        waitBar.setWindowTitle('Analysis')
+        waitBar.setValue(0)
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        OutputResult = SRALib.runAnalysis(self.inputMotion, soilList, profileList, analysisDB, [waitBar, App])
+
+        # Esportazione output
+        firstIter = True
+        for risultato in OutputResult:
+            currentOutput = type(risultato).__name__
+            if currentOutput == 'ResponseSpectrumOutput':
+                periodVect = risultato.refs[::-1] ** -1
+                PSAVect = risultato.values[::-1]
+                excelContent = pd.DataFrame(np.array([periodVect, PSAVect])).T
+            else:
+                ascVect = periodVect = risultato.refs
+                ordVect = risultato.values[::-1]
+                excelContent = pd.DataFrame(np.array([ascVect, ordVect])).T
+
+            try:
+                if firstIter:
+                    with pd.ExcelWriter(excelFile, mode='w') as writer:
+                        excelContent.to_excel(writer, sheet_name=currentOutput)
+                else:
+                    with pd.ExcelWriter(excelFile, mode='a') as writer:
+                        excelContent.to_excel(writer, sheet_name=currentOutput)
+                firstIter = False
+            except PermissionError:
+                msg = "An error occurred while saving Excel file.\nPlease check if the file is open and try again"
+                QMessageBox.critical(QMessageBox(), "Check Excel file", msg)
+                return None
+
+    def preAnalysisChecks(self, soilList, profileList, outputList):
+        # Controllo campi vuoti
+        if len(soilList) == 0:
+            msg = "Soil table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check soil", msg)
+            return None
+        elif len(profileList) == 0:
+            msg = "Profile table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+
+        # Controllo valori non validi
+        if soilList == 'SoilNan':
+            msg = "The unit weight in soil table must be a numeric value"
+            QMessageBox.warning(QMessageBox(), "Check soil", msg)
+            return None
+        elif profileList == 'ProfileNan':
+            msg = "Layer thickness and velocity in profile table must be numeric value"
+            QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+
+        # Check di completezza dati di input
+        campiVuotiSuolo = [elemento == '' or elemento is None for riga in soilList for elemento in riga]
+        campiVuotiProfilo = [elemento == '' or elemento is None for riga in profileList for elemento in riga]
+        if any(campiVuotiSuolo):
+            msg = "Fields in soil table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check soil", msg)
+            return None
+        elif any(campiVuotiProfilo):
+            msg = "Fields in profile table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+        elif self.inputMotion == '':
+            msg = "Import an input time history before running analysis"
+            QMessageBox.warning(QMessageBox(), "Check input", msg)
+            return None
+        elif not any(outputList):
+            msg = "No option selected for output"
+            QMessageBox.warning(QMessageBox(), "Check output", msg)
+            return None
+        return 0
 
 
 if __name__ == "__main__":

@@ -79,7 +79,7 @@ def loadTH(fileName, Fs, Units):
     measureUnits = [re.findall(r'UNITS: (.*)', linea) for linea in Contenuto[:50] if linea.startswith('UNITS')]
 
     eventID = 'Input Motion' if len(eventID) == 0 else eventID[0][0]
-    timeStep = 1/Fs if len(timeStep) == 0 else float(timeStep[0][0])
+    timeStep = 1 / Fs if len(timeStep) == 0 else float(timeStep[0][0])
     measureUnits = Units if len(measureUnits) == 0 else measureUnits[0][0]
 
     conversionFactor = conversionFactorList[measureUnits]
@@ -91,22 +91,58 @@ def loadTH(fileName, Fs, Units):
 
 
 def drawTH(inputMotion, asseGrafico):
+    asseGrafico.clear()
     asseGrafico.plot(inputMotion.times, inputMotion.accels)
     asseGrafico.set_xlabel('Time [s]')
     asseGrafico.set_ylabel('Agg [g]')
-    asseGrafico.grid()
+    asseGrafico.grid('on')
     asseGrafico.set_title(inputMotion.description)
 
 
-def runAnalysis(inputMotion, soilTable, profileTable, analysisDict):
+def table2list(soilTable, profileTable):
+    soilList = list()
+    for riga in range(soilTable.rowCount()):
+        currentSoilName = soilTable.item(riga, 0).text() if soilTable.item(riga, 0) is not None else ''
+        currentSoilWeight = soilTable.item(riga, 1).text() if soilTable.item(riga, 1) is not None else ''
+        currentCurve = soilTable.cellWidget(riga, 2).currentText()
+        try:
+            soilList.append([currentSoilName, float(currentSoilWeight), currentCurve])
+        except ValueError:
+            soilList = 'SoilNan'
+            break
+
+    profileList = list()
+    for riga in range(profileTable.rowCount()):
+        currentThickness = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
+        currentSoilName = profileTable.item(riga, 2).text() if profileTable.item(riga, 2) is not None else ''
+        currentVelocity = profileTable.item(riga, 3).text() if profileTable.item(riga, 3) is not None else ''
+
+        try:
+            profileList.append([float(currentThickness), currentSoilName, float(currentVelocity)])
+        except ValueError:
+            profileList = 'ProfileNan'
+            break
+
+    return soilList, profileList
+
+
+def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None):
+    if graphWait is not None:
+        waitBar = graphWait[0]
+        App = graphWait[1]
+
+        waitBar.setLabelText('Building layers...')
+        waitBar.setValue(1)
+        App.processEvents()
+    else:
+        waitBar = App = None
+
     # Soil table analysis
     curveDict = analysisDict['CurveDB']
     soilDict = dict()
-    for riga in range(soilTable.rowCount()):
-        currentSoilName = soilTable.item(riga, 0).text()
-        currentSoilWeight = soilTable.item(riga, 1).text()
-        currentCurve = curveDict[soilTable.cellWidget(riga, 2).currentText()]
-
+    for riga in soilList:
+        currentSoilName, currentSoilWeight, currentCurveName = riga
+        currentCurve = curveDict[currentCurveName]
         currentNonLinearityG = pysra.site.NonlinearProperty('', currentCurve[:, 0],
                                                             currentCurve[:, 1], param='mod_reduc')
         currentNonLinearityD = pysra.site.NonlinearProperty('', currentCurve[:, 0],
@@ -117,18 +153,61 @@ def runAnalysis(inputMotion, soilTable, profileTable, analysisDict):
 
     # Defining bedrock soil
     BedrockData = analysisDict['Bedrock']
-    BedrockSoil = pysra.site.SoilType('Bedrock', float(BedrockData[0]), None, float(BedrockData[2]/100))
+    BedrockSoil = pysra.site.SoilType('Bedrock', float(BedrockData[0]), None, float(BedrockData[2]) / 100)
+
+    if waitBar is not None:
+        waitBar.setLabelText('Building profile...')
+        waitBar.setValue(2)
+        App.processEvents()
 
     # Creating profile
     profileLayer = list()
-    for riga in range(profileTable.rowCount()):
-        currentThickness = float(profileTable.item(riga, 0).text())
-        currentSoilName = profileTable.item(riga, 2).text()
-        currentVelocity = float(profileTable.item(riga, 3))
-
+    for riga in profileList:
+        currentThickness, currentSoilName, currentVelocity = riga
         profileLayer.append(pysra.site.Layer(soilDict[currentSoilName], currentThickness, currentVelocity))
 
     # Adding bedrock layer
     profileLayer.append(pysra.site.Layer(BedrockSoil, 0, float(BedrockData[1])))
-
     finalProfile = pysra.site.Profile(profileLayer)
+
+    discretizationParam = analysisDict['Discretization']
+    if discretizationParam[0] > 0:
+        finalProfile = finalProfile.auto_discretize(*discretizationParam)
+
+    # Running analysis
+    if waitBar is not None:
+        waitBar.setLabelText('Running analysis...')
+        waitBar.setValue(3)
+        App.processEvents()
+
+    strainRatio, errorTolerance, maxIterations = analysisDict['LECalcOptions']
+    computationEngine = pysra.propagation.EquivalentLinearCalculator(strainRatio, errorTolerance, maxIterations)
+    freqRange = np.logspace(-1, 2, num=91)  # Periods between 0.01 and 10 seconds
+
+    # Building output object
+    outputList = analysisDict['OutputList']
+    outputParam = analysisDict['OutputParam']
+
+    outputObject = list()
+    if outputList[0]:  # Response spectrum
+        outputObject.append(pysra.output.ResponseSpectrumOutput(
+            freqRange, pysra.output.OutputLocation('outcrop', depth=outputParam[0]),
+            osc_damping=0.05))
+    if outputList[1]:  # Acceleration
+        outputObject.append(pysra.output.AccelerationTSOutput(
+            pysra.output.OutputLocation('outcrop', depth=outputParam[1])))
+    if outputList[2]:  # Strains
+        outputObject.append(pysra.output.StrainTSOutput(
+            pysra.output.OutputLocation('within', depth=outputParam[2]), in_percent=True))
+
+    finalOutput = pysra.output.OutputCollection(outputObject)
+
+    computationEngine(inputMotion, finalProfile, finalProfile.location('outcrop', index=-1))
+    finalOutput(computationEngine)
+
+    if waitBar is not None:
+        waitBar.setLabelText('Running analysis...')
+        waitBar.setValue(4)
+        App.processEvents()
+
+    return finalOutput
