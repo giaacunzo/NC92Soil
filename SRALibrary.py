@@ -94,7 +94,7 @@ def drawTH(inputMotion, asseGrafico):
     asseGrafico.clear()
     asseGrafico.plot(inputMotion.times, inputMotion.accels)
     asseGrafico.set_xlabel('Time [s]')
-    asseGrafico.set_ylabel('Agg [g]')
+    asseGrafico.set_ylabel('Acc [g]')
     asseGrafico.grid('on')
     asseGrafico.set_title(inputMotion.description)
 

@@ -33,7 +33,12 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.tableWidget_Profile.horizontalHeader().setStretchLastSection(True)
 
         # Caricamento database curve di decadimento
-        self.curveDB = SRALib.degradationCurves('CurveDB.xlsx')
+        try:
+            self.curveDB = SRALib.degradationCurves('CurveDB.xlsx')
+        except FileNotFoundError:
+            msg = "File CurveDB.xlsx has not been found in the program folder"
+            QMessageBox.critical(QMessageBox(), "Check database", msg)
+            sys.exit(-1)
 
     def assignWidgets(self):
         self.pushButton_addSoil.clicked.connect(self.addRow)
