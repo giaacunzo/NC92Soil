@@ -173,8 +173,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 PSAVect = risultato.values[::-1]
                 excelContent = pd.DataFrame(np.array([periodVect, PSAVect])).T
             else:
-                ascVect = periodVect = risultato.refs
-                ordVect = risultato.values[::-1]
+                ascVect = risultato.refs
+                ordVect = risultato.values
                 excelContent = pd.DataFrame(np.array([ascVect, ordVect])).T
 
             try:
@@ -189,6 +189,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 msg = "An error occurred while saving Excel file.\nPlease check if the file is open and try again"
                 QMessageBox.critical(QMessageBox(), "Check Excel file", msg)
                 return None
+
+            QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, outputList):
         # Controllo campi vuoti

@@ -113,7 +113,7 @@ def table2list(soilTable, profileTable):
 
     profileList = list()
     for riga in range(profileTable.rowCount()):
-        currentThickness = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
+        currentThickness = profileTable.item(riga, 1).text() if profileTable.item(riga, 0) is not None else ''
         currentSoilName = profileTable.item(riga, 2).text() if profileTable.item(riga, 2) is not None else ''
         currentVelocity = profileTable.item(riga, 3).text() if profileTable.item(riga, 3) is not None else ''
 

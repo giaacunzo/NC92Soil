@@ -14,7 +14,6 @@ from PySide2.QtGui import (QBrush, QColor, QConicalGradient, QCursor, QFont,
     QFontDatabase, QIcon, QLinearGradient, QPalette, QPainter, QPixmap,
     QRadialGradient)
 from PySide2.QtWidgets import *
-
 from mplwidget import MplWidget
 
 
@@ -224,7 +223,7 @@ class Ui_MainWindow(object):
     # setupUi
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"SRA batcher", None))
+        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Prisencolinensinainciu-Soil", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)
