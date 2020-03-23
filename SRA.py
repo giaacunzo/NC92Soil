@@ -7,6 +7,7 @@ import numpy as np
 import sys
 import SRALibrary as SRALib
 import pandas as pd
+import os
 
 
 # noinspection PyCallByClass
@@ -18,7 +19,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # Inizializzazione attributi principali
         self.curveDB = dict()
         self.userModified = True
-        self.inputMotion = ''
+        self.inputMotion = dict()
 
         self.setupUi(self)
         self.assignWidgets()
@@ -49,6 +50,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_drawProfile.clicked.connect(self.drawProfile)
         self.pushButton_loadTH.clicked.connect(self.loadTH)
         self.pushButton_run.clicked.connect(self.runAnalysis)
+        self.comboBox_eventList.currentIndexChanged.connect(self.viewTH)
 
     def addRow(self):
         senderName = self.sender().objectName()
@@ -103,9 +105,24 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.sender().setItem(riga, 0, QTableWidgetItem(str(currentDepth)))
         self.userModified = True
 
+    def viewTH(self):
+        currentData = self.inputMotion[self.comboBox_eventList.currentText()]
+        if not getattr(self.graphWidget_TH, 'axes', False):
+            self.graphWidget_TH.axes = self.graphWidget_TH.figure.add_subplot(111)
+
+        SRALib.drawTH(currentData[0], self.graphWidget_TH.axes)
+        self.graphWidget_TH.draw()
+
+        self.lineEdit_FS.setText(str(1 / currentData[0].time_step))
+        self.comboBox_Units.setCurrentText(currentData[-1])
+
+        pass
+
     def loadTH(self):
-        timeHistoryFile = QFileDialog.getOpenFileName(self, caption="Choose input motion file")[0]
-        if timeHistoryFile == '':
+        # timeHistoryFile = QFileDialog.getOpenFileName(self, caption="Choose input motion file")[0]
+        timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
+        A = 5
+        if len(timeHistoryFiles) == 0:
             return None
 
         try:
@@ -115,16 +132,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         currentUnits = self.comboBox_Units.currentText()
 
-        inputMotion, measureUnits = SRALib.loadTH(timeHistoryFile, currentFS, currentUnits)
-        self.lineEdit_FS.setText(str(1/inputMotion.time_step))
-        self.comboBox_Units.setCurrentText(measureUnits)
-
-        if not getattr(self.graphWidget_TH, 'axes', False):
-            self.graphWidget_TH.axes = self.graphWidget_TH.figure.add_subplot(111)
-
-        SRALib.drawTH(inputMotion, self.graphWidget_TH.axes)
-        self.graphWidget_TH.draw()
-        self.inputMotion = inputMotion
+        inputMotionDict = SRALib.loadTH(timeHistoryFiles, currentFS, currentUnits)  # RIPARTIRE DA QUI
+        self.inputMotion = inputMotionDict
+        self.comboBox_eventList.addItems(inputMotionDict.keys())
+        self.comboBox_eventList.setEnabled(True)
 
     def runAnalysis(self):
         if self.checkBox_autoDiscretize.isChecked():
@@ -150,47 +161,65 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                   self.lineEdit_bedDamping.text()], 'OutputList': outputList,
                       'OutputParam': outputParam, 'LECalcOptions': LECalcOptions}
 
-        excelFile = QFileDialog.getSaveFileName(self, caption="Save the output file as",
-                                                filter="*.xlsx")[0]
-        if excelFile == '':
+        # excelFile = QFileDialog.getSaveFileName(self, caption="Save the output file as",
+        #                                         filter="*.xlsx")[0]
+
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        if outputFolder == '':
             return None
 
-        waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, 4)
-        waitBar.setWindowTitle('Analysis')
-        waitBar.setValue(0)
-        waitBar.setMinimumDuration(0)
-        waitBar.show()
-        App.processEvents()
+        currentData = self.inputMotion
+        analysisCounter = 1
+        totalMotions = len(currentData.keys())
 
-        OutputResult = SRALib.runAnalysis(self.inputMotion, soilList, profileList, analysisDB, [waitBar, App])
-
-        # Esportazione output
         firstIter = True
-        for risultato in OutputResult:
-            currentOutput = type(risultato).__name__
-            if currentOutput == 'ResponseSpectrumOutput':
-                periodVect = risultato.refs[::-1] ** -1
-                PSAVect = risultato.values[::-1]
-                excelContent = pd.DataFrame(np.array([periodVect, PSAVect])).T
-            else:
-                ascVect = risultato.refs
-                ordVect = risultato.values
-                excelContent = pd.DataFrame(np.array([ascVect, ordVect])).T
+        for fileName in currentData.keys():
+            waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, 4)
+            waitBar.setWindowTitle('Analysis {} of {}'.format(analysisCounter, totalMotions))
+            waitBar.setValue(0)
+            waitBar.setMinimumDuration(0)
+            waitBar.show()
+            App.processEvents()
 
-            try:
-                if firstIter:
-                    with pd.ExcelWriter(excelFile, mode='w') as writer:
-                        excelContent.to_excel(writer, sheet_name=currentOutput)
+            OutputResult = SRALib.runAnalysis(currentData[fileName][0], soilList, profileList, analysisDB, [waitBar, App])
+
+            # Esportazione output
+            for risultato in OutputResult:
+                currentOutput = type(risultato).__name__
+                if currentOutput == 'ResponseSpectrumOutput':
+                    periodVect = risultato.refs[::-1] ** -1
+                    PSAVect = risultato.values[::-1]
+                    excelContent = pd.DataFrame(np.array([periodVect, PSAVect])).T
+                    columnsName = ['T [s]', 'PSA [g]']
                 else:
-                    with pd.ExcelWriter(excelFile, mode='a') as writer:
-                        excelContent.to_excel(writer, sheet_name=currentOutput)
-                firstIter = False
-            except PermissionError:
-                msg = "An error occurred while saving Excel file.\nPlease check if the file is open and try again"
-                QMessageBox.critical(QMessageBox(), "Check Excel file", msg)
-                return None
+                    ascVect = risultato.refs
+                    ordVect = risultato.values
+                    excelContent = pd.DataFrame(np.array([ascVect, ordVect])).T
+                    if currentOutput == 'AccelerationTSOutput':
+                        columnsName = ['Time [s]', 'Acc [g]']
+                    elif currentOutput == 'StrainTSOutput':
+                        columnsName = ['Time [s]', 'Strain']
+                    else:
+                        columnsName = ['1', '2']
 
-            QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
+                excelFile = os.path.join(outputFolder, currentOutput + '.xlsx')
+                currentEvent = fileName
+                excelContent.columns = columnsName
+                try:
+                    if firstIter:
+                        with pd.ExcelWriter(excelFile, mode='w') as writer:
+                            excelContent.to_excel(writer, sheet_name=currentEvent, index=False)
+                    else:
+                        with pd.ExcelWriter(excelFile, mode='a') as writer:
+                            excelContent.to_excel(writer, sheet_name=currentEvent, index=True)
+                except PermissionError:
+                    msg = "An error occurred while saving Excel file.\nPlease check if the file is open and try again"
+                    QMessageBox.critical(QMessageBox(), "Check Excel file", msg)
+                    return None
+            firstIter = False
+            analysisCounter += 1
+
+        QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, outputList):
         # Controllo campi vuoti
@@ -224,7 +253,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             msg = "Fields in profile table cannot be empty"
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
             return None
-        elif self.inputMotion == '':
+        elif len(self.inputMotion) == 0:
             msg = "Import an input time history before running analysis"
             QMessageBox.warning(QMessageBox(), "Check input", msg)
             return None

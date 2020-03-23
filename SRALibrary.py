@@ -68,26 +68,36 @@ def drawProfile(profileTable, asseGrafico, lineLength=0):
     asseGrafico.text(lineLength / 2, -bedrockDepth * 5 / 4, 'Bedrock')
 
 
-def loadTH(fileName, Fs, Units):
+def loadTH(fileNames, Fs, Units):
     conversionFactorList = {'cm/s^2': 1 / 980.665, 'm/s^2': 1 / 9.80665, 'g': 1}
-    with open(fileName) as accFile:
-        Contenuto = accFile.read().splitlines()
 
-    # Check di event ID, timestep e unità di misura
-    eventID = [re.findall(r'EVENT_ID: (.*)', linea) for linea in Contenuto[:50] if linea.startswith('EVENT_ID')]
-    timeStep = [re.findall(r'\d+\.*\d*', linea) for linea in Contenuto[:50] if linea.startswith('SAMPLING')]
-    measureUnits = [re.findall(r'UNITS: (.*)', linea) for linea in Contenuto[:50] if linea.startswith('UNITS')]
+    inputMotionsList = list()
+    THDict = dict()
 
-    eventID = 'Input Motion' if len(eventID) == 0 else eventID[0][0]
-    timeStep = 1 / Fs if len(timeStep) == 0 else float(timeStep[0][0])
-    measureUnits = Units if len(measureUnits) == 0 else measureUnits[0][0]
+    for fileName in fileNames:
+        with open(fileName) as accFile:
+            Contenuto = accFile.read().splitlines()
 
-    conversionFactor = conversionFactorList[measureUnits]
-    numericAcc = [conversionFactor * float(valore) for valore in Contenuto if
-                  valore.replace('.', '').replace('-', '').isdigit()]
-    inputMotion = pysra.motion.TimeSeriesMotion(os.path.split(fileName)[-1], eventID, timeStep, numericAcc)
+        # Check di event ID, timestep e unità di misura
+        eventID = [re.findall(r'EVENT_ID: (.*)', linea) for linea in Contenuto[:50] if linea.startswith('EVENT_ID')]
+        timeStep = [re.findall(r'\d+\.*\d*', linea) for linea in Contenuto[:50] if linea.startswith('SAMPLING')]
+        measureUnits = [re.findall(r'UNITS: (.*)', linea) for linea in Contenuto[:50] if linea.startswith('UNITS')]
 
-    return inputMotion, measureUnits
+        eventID = 'Input Motion' if len(eventID) == 0 else eventID[0][0]
+        timeStep = 1 / Fs if len(timeStep) == 0 else float(timeStep[0][0])
+        measureUnits = Units if len(measureUnits) == 0 else measureUnits[0][0]
+
+        onlyName = os.path.basename(fileName)
+
+        conversionFactor = conversionFactorList[measureUnits]
+        numericAcc = [conversionFactor * float(valore) for valore in Contenuto if
+                      valore.replace('.', '').replace('-', '').isdigit()]
+        inputMotion = pysra.motion.TimeSeriesMotion(
+            os.path.split(fileName)[-1], eventID, timeStep, numericAcc)
+
+        THDict[onlyName] = [inputMotion, eventID, timeStep, measureUnits]
+
+    return THDict
 
 
 def drawTH(inputMotion, asseGrafico):

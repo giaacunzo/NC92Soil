@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Prisencolinensinainciu-Soil</string>
+   <string>NC92-Soil</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="MplWidget" name="graphWidget" native="true">
@@ -514,7 +514,7 @@
      <rect>
       <x>230</x>
       <y>780</y>
-      <width>31</width>
+      <width>81</width>
       <height>16</height>
      </rect>
     </property>
@@ -525,13 +525,13 @@
      </font>
     </property>
     <property name="text">
-     <string>Units</string>
+     <string>Original units</string>
     </property>
    </widget>
    <widget class="QComboBox" name="comboBox_Units">
     <property name="geometry">
      <rect>
-      <x>290</x>
+      <x>330</x>
       <y>780</y>
       <width>91</width>
       <height>22</height>
@@ -762,6 +762,38 @@
     </property>
     <property name="text">
      <string>Error tolerance [%]</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="comboBox_eventList">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>820</y>
+      <width>521</width>
+      <height>22</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_14">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>820</y>
+      <width>71</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>File name</string>
     </property>
    </widget>
   </widget>

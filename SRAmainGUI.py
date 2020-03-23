@@ -14,6 +14,7 @@ from PySide2.QtGui import (QBrush, QColor, QConicalGradient, QCursor, QFont,
     QFontDatabase, QIcon, QLinearGradient, QPalette, QPainter, QPixmap,
     QRadialGradient)
 from PySide2.QtWidgets import *
+
 from mplwidget import MplWidget
 
 
@@ -157,14 +158,14 @@ class Ui_MainWindow(object):
         self.lineEdit_FS.setGeometry(QRect(80, 780, 113, 22))
         self.label_8 = QLabel(self.centralwidget)
         self.label_8.setObjectName(u"label_8")
-        self.label_8.setGeometry(QRect(230, 780, 31, 16))
+        self.label_8.setGeometry(QRect(230, 780, 81, 16))
         self.label_8.setFont(font1)
         self.comboBox_Units = QComboBox(self.centralwidget)
         self.comboBox_Units.addItem("")
         self.comboBox_Units.addItem("")
         self.comboBox_Units.addItem("")
         self.comboBox_Units.setObjectName(u"comboBox_Units")
-        self.comboBox_Units.setGeometry(QRect(290, 780, 91, 22))
+        self.comboBox_Units.setGeometry(QRect(330, 780, 91, 22))
         self.lineEdit_maxFreq = QLineEdit(self.centralwidget)
         self.lineEdit_maxFreq.setObjectName(u"lineEdit_maxFreq")
         self.lineEdit_maxFreq.setGeometry(QRect(160, 500, 71, 22))
@@ -211,6 +212,14 @@ class Ui_MainWindow(object):
         self.label_13.setObjectName(u"label_13")
         self.label_13.setGeometry(QRect(690, 790, 121, 16))
         self.label_13.setFont(font1)
+        self.comboBox_eventList = QComboBox(self.centralwidget)
+        self.comboBox_eventList.setObjectName(u"comboBox_eventList")
+        self.comboBox_eventList.setEnabled(False)
+        self.comboBox_eventList.setGeometry(QRect(120, 820, 521, 22))
+        self.label_14 = QLabel(self.centralwidget)
+        self.label_14.setObjectName(u"label_14")
+        self.label_14.setGeometry(QRect(30, 820, 71, 16))
+        self.label_14.setFont(font1)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
@@ -223,7 +232,7 @@ class Ui_MainWindow(object):
     # setupUi
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Prisencolinensinainciu-Soil", None))
+        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"NC92-Soil", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)
@@ -272,7 +281,7 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(tooltip)
         self.lineEdit_FS.setToolTip(QCoreApplication.translate("MainWindow", u"If specified in input file, sample frequency will be automatically imported from input file", None))
 #endif // QT_CONFIG(tooltip)
-        self.label_8.setText(QCoreApplication.translate("MainWindow", u"Units", None))
+        self.label_8.setText(QCoreApplication.translate("MainWindow", u"Original units", None))
         self.comboBox_Units.setItemText(0, QCoreApplication.translate("MainWindow", u"g", None))
         self.comboBox_Units.setItemText(1, QCoreApplication.translate("MainWindow", u"cm/s^2", None))
         self.comboBox_Units.setItemText(2, QCoreApplication.translate("MainWindow", u"m/s^2", None))
@@ -293,5 +302,6 @@ class Ui_MainWindow(object):
         self.label_12.setText(QCoreApplication.translate("MainWindow", u"Max iterations", None))
         self.lineEdit_maxTol.setText(QCoreApplication.translate("MainWindow", u"2", None))
         self.label_13.setText(QCoreApplication.translate("MainWindow", u"Error tolerance [%]", None))
+        self.label_14.setText(QCoreApplication.translate("MainWindow", u"File name", None))
     # retranslateUi
 
