@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import pysra
 import os
+from itertools import permutations
 
 
 def degradationCurves(fileName):
@@ -29,31 +30,57 @@ def degradationCurves(fileName):
     return curveDict
 
 
-def drawProfile(profileTable, asseGrafico, lineLength=0):
-    asseGrafico.clear()
-    totalRows = profileTable.rowCount()
+def calcPermutations(profileList, returnpermutations=False):
+    totalBricks = len(profileList)
+    soilBricks = [strato[1] for strato in profileList]
+    uniqueSoil = sorted(set(soilBricks))
 
+    occurrenceList = [soilBricks.count(elemento) for elemento in uniqueSoil]
+
+    # Computing real number of combinations
+    profileTuple = [tuple(elemento) for elemento in profileList]
+    uniqueBricks = set(profileTuple)
+    bricksOccurrence = [profileTuple.count(elemento) for elemento in uniqueBricks]
+
+    percStrings = ["{}: {:.1f}%".format(name, 100*occurrence/totalBricks)
+                   for name, occurrence in zip(uniqueSoil, occurrenceList)]
+    finalString = " , ".join(percStrings)
+
+    denomFact = np.prod([np.math.factorial(occurrence) for occurrence in bricksOccurrence])
+    numFact = np.math.factorial(totalBricks)
+    if not returnpermutations:
+        return numFact/denomFact, finalString, len(uniqueBricks)
+    else:
+        permutationList = list(set(permutations(profileTuple)))
+        return permutationList
+
+
+def drawProfile(profileList, asseGrafico, lineLength=0):
+    asseGrafico.clear()
     currentThickness = currentDepth = 0
 
+    profileList = addDepths(profileList)
+
     if lineLength == 0:
-        finalDepth = float(profileTable.item(totalRows - 1, 0).text()) + float(
-            profileTable.item(totalRows - 1, 1).text())
+        finalDepth = profileList[-1][0] + profileList[-1][1]
         lineLength = 3 * finalDepth
 
-    for riga in range(totalRows):
-        currentDepth = float(profileTable.item(riga, 0).text())
-        currentThickness = float(profileTable.item(riga, 1).text())
+    # Assegna un colore agli strati
+    colorList = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+    uniqueNames = sorted(set([strato[2] for strato in profileList]))
+    colorDict = dict()
+    for indice, nome in enumerate(uniqueNames):
+        colorDict[nome] = colorList[indice]
+
+    for strato in profileList:
+        currentDepth = strato[0]
+        currentThickness = strato[1]
+        currentSoilName = strato[2]
         currentCoord = [(0, -currentDepth), (lineLength, -currentDepth),
                         (lineLength, -(currentDepth + currentThickness)),
                         (0, -(currentDepth + currentThickness)), (0, -currentDepth)]
         CoordX, CoordY = zip(*currentCoord)
-        asseGrafico.fill(CoordX, CoordY, linewidth=2.0, alpha=0.2)
-        currentSoilName = profileTable.item(riga, 2)
-
-        if currentSoilName is not None:
-            currentSoilName = currentSoilName.text()
-        else:
-            currentSoilName = 'N/D'
+        asseGrafico.fill(CoordX, CoordY, colorDict[currentSoilName], linewidth=2.0, alpha=0.2, edgecolor='k')
 
         asseGrafico.text(lineLength / 2, -(currentDepth + currentThickness / 2), currentSoilName)
         asseGrafico.axis('equal')
@@ -109,6 +136,34 @@ def drawTH(inputMotion, asseGrafico):
     asseGrafico.set_title(inputMotion.description)
 
 
+def makeBricks(profileTable, brickSize):
+    totalRows = profileTable.rowCount()
+    newProfile = list()
+    for riga in range(totalRows):
+        currentThickness = float(profileTable.item(riga, 1).text())
+        currentNameCell = profileTable.item(riga, 2)
+        currentVelocity = float(profileTable.item(riga, 3).text()) if profileTable.item(riga, 3) is not None else 0
+        currentName = profileTable.item(riga, 2).text() if currentNameCell is not None else 'N/D'
+        numberBricks = int(np.floor(currentThickness/brickSize))
+
+        for strato in range(numberBricks):
+            if strato != numberBricks - 1:
+                stratoThickness = brickSize
+            else:
+                stratoThickness = currentThickness - brickSize*(numberBricks - 1)
+            newProfile.append([stratoThickness, currentName, currentVelocity])
+    return newProfile
+
+
+def addDepths(profileList):
+    currentDepth = 0
+    newProfile = list()
+    for strato in profileList:
+        newProfile.append([currentDepth] + list(strato))
+        currentDepth += strato[0]
+    return newProfile
+
+
 def table2list(soilTable, profileTable):
     soilList = list()
     for riga in range(soilTable.rowCount()):
@@ -123,6 +178,7 @@ def table2list(soilTable, profileTable):
 
     profileList = list()
     for riga in range(profileTable.rowCount()):
+        currentDepth = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
         currentThickness = profileTable.item(riga, 1).text() if profileTable.item(riga, 0) is not None else ''
         currentSoilName = profileTable.item(riga, 2).text() if profileTable.item(riga, 2) is not None else ''
         currentVelocity = profileTable.item(riga, 3).text() if profileTable.item(riga, 3) is not None else ''
@@ -173,7 +229,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
     # Creating profile
     profileLayer = list()
     for riga in profileList:
-        currentThickness, currentSoilName, currentVelocity = riga
+        currentDepth, currentThickness, currentSoilName, currentVelocity = riga
         profileLayer.append(pysra.site.Layer(soilDict[currentSoilName], currentThickness, currentVelocity))
 
     # Adding bedrock layer

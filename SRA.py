@@ -1,4 +1,5 @@
 from warnings import filterwarnings
+
 filterwarnings('ignore', category=UserWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
@@ -47,10 +48,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_removeSoil.clicked.connect(self.removeRow)
         self.pushButton_removeProfile.clicked.connect(self.removeRow)
         self.tableWidget_Profile.cellChanged.connect(self.profileChanged)
-        self.pushButton_drawProfile.clicked.connect(self.drawProfile)
+        self.pushButton_drawProfile.clicked.connect(self.makeProfile)
         self.pushButton_loadTH.clicked.connect(self.loadTH)
         self.pushButton_run.clicked.connect(self.runAnalysis)
         self.comboBox_eventList.currentIndexChanged.connect(self.viewTH)
+        self.comboBox_analysisType.currentIndexChanged.connect(self.changeAnalysis)
 
     def addRow(self):
         senderName = self.sender().objectName()
@@ -71,8 +73,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 currentTable.setItem(currentRow, 0, QTableWidgetItem('0.00'))
                 currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
             else:
-                currentDepth = float(currentTable.item(currentRow-1, 0).text()) + \
-                               float(currentTable.item(currentRow-1, 1).text())
+                currentDepth = float(currentTable.item(currentRow - 1, 0).text()) + \
+                               float(currentTable.item(currentRow - 1, 1).text())
                 currentTable.setItem(currentRow, 0, QTableWidgetItem(str(currentDepth)))
                 currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
             currentTable.item(currentRow, 0).setFlags(QtCore.Qt.ItemIsEnabled)
@@ -87,11 +89,26 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if len(selectedRow) > 0:
             getattr(self, tableName).model().removeRow(selectedRow[0].row())
 
-    def drawProfile(self):
+    def makeProfile(self):
         if not getattr(self.graphWidget, 'axes', False):
             self.graphWidget.axes = self.graphWidget.figure.add_subplot(111)
 
-        SRALib.drawProfile(self.tableWidget_Profile, self.graphWidget.axes)
+        currentAnalysis = self.comboBox_analysisType.currentText()
+        brickSize = float(self.lineEdit_brickSize.text())
+        if currentAnalysis == 'Permutations':
+            profileList = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
+            totalPermutations, percString, uniqueBricks = SRALib.calcPermutations(profileList)
+
+            # Writing informations in the overview console
+            messageString = "Total bricks: {} - Minimum brick size: {}m - Brick types: {}\nSoil composition -> {}\n" \
+                            "Total permutations: {}".format(len(profileList), brickSize, uniqueBricks, percString,
+                                                            "{:,}".format(int(totalPermutations)).replace(',', "'")
+                                                            )
+            self.plainTextEdit_overview.setPlainText(messageString)
+        else:
+            profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)[1]
+
+        SRALib.drawProfile(profileList, self.graphWidget.axes)
         self.graphWidget.draw()
 
     def profileChanged(self):
@@ -101,7 +118,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         self.userModified = False
         for riga in range(1, rowNumber):
-            currentDepth = float(self.sender().item(riga-1, 0).text()) + float(self.sender().item(riga-1, 1).text())
+            currentDepth = float(self.sender().item(riga - 1, 0).text()) + float(self.sender().item(riga - 1, 1).text())
             self.sender().setItem(riga, 0, QTableWidgetItem(str(currentDepth)))
         self.userModified = True
 
@@ -117,6 +134,15 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_Units.setCurrentText(currentData[-1])
 
         pass
+
+    def changeAnalysis(self):
+        currentData = self.comboBox_analysisType.currentText()
+        if currentData == 'Permutations':
+            self.lineEdit_brickSize.setEnabled(True)
+            self.plainTextEdit_overview.setEnabled(True)
+        else:
+            self.lineEdit_brickSize.setEnabled(False)
+            self.plainTextEdit_overview.setEnabled(False)
 
     def loadTH(self):
         # timeHistoryFile = QFileDialog.getOpenFileName(self, caption="Choose input motion file")[0]
@@ -144,6 +170,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             currentMaxFreq = currentWaveLength = -1
 
+        analysisType = self.comboBox_analysisType.currentText()
+
         soilList, profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)
 
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
@@ -161,64 +189,110 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                   self.lineEdit_bedDamping.text()], 'OutputList': outputList,
                       'OutputParam': outputParam, 'LECalcOptions': LECalcOptions}
 
-        # excelFile = QFileDialog.getSaveFileName(self, caption="Save the output file as",
-        #                                         filter="*.xlsx")[0]
-
         outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
         if outputFolder == '':
             return None
 
-        currentData = self.inputMotion
-        analysisCounter = 1
-        totalMotions = len(currentData.keys())
+        if analysisType == 'Permutations':
+            brickSize = float(self.lineEdit_brickSize.text())
+            brickProfile = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
+            numberPermutations = SRALib.calcPermutations(brickProfile)[0]
 
-        firstIter = True
-        for fileName in currentData.keys():
-            waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, 4)
-            waitBar.setWindowTitle('Analysis {} of {}'.format(analysisCounter, totalMotions))
+            waitBar = QProgressDialog("Generating {} permutations..".format(int(numberPermutations)), "Cancel", 0, 1)
+            waitBar.setWindowTitle('NC92-Soil permutator')
             waitBar.setValue(0)
             waitBar.setMinimumDuration(0)
             waitBar.show()
             App.processEvents()
 
-            OutputResult = SRALib.runAnalysis(currentData[fileName][0], soilList, profileList, analysisDB, [waitBar, App])
+            profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
 
-            # Esportazione output
-            for risultato in OutputResult:
-                currentOutput = type(risultato).__name__
-                if currentOutput == 'ResponseSpectrumOutput':
-                    periodVect = risultato.refs[::-1] ** -1
-                    PSAVect = risultato.values[::-1]
-                    excelContent = pd.DataFrame(np.array([periodVect, PSAVect])).T
-                    columnsName = ['T [s]', 'PSA [g]']
+            waitBar.setValue(1)
+            App.processEvents()
+        else:
+            profilePermutations = [profileList]
+
+        currentData = self.inputMotion
+        analysisCounter = 1
+        totalMotions = len(currentData.keys())
+        totalProfiles = len(profilePermutations)
+        totalAnalysis = totalProfiles*totalMotions
+
+        risultatiDict = dict()
+        profiliDF = pd.DataFrame()
+
+        waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, totalProfiles-1)
+        waitBar.setWindowTitle('NC92-Soil')
+        waitBar.setValue(0)
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        for numberProfile, profiloCorrente in enumerate(profilePermutations):
+
+            waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
+
+            profileList = SRALib.addDepths(profiloCorrente)  # Aggiunge le profondità per il profilo corrente
+            profileSoilNames = [strato[2] for strato in profileList]
+            profileSoilThick = [str(strato[1]) for strato in profileList]
+            profileSoilDesc = ["{} - {} m".format(name, thickness)
+                               for name, thickness in zip(profileSoilNames, profileSoilThick)]
+            profileCode = "P{}".format(numberProfile + 1)
+
+            profiliDF[profileCode] = profileSoilDesc
+
+            for fileName in currentData.keys():
+
+                OutputResult = SRALib.runAnalysis(currentData[fileName][0], soilList, profileList, analysisDB)
+
+                # Esportazione output
+                for risultato in OutputResult:
+                    currentOutput = type(risultato).__name__
+                    if currentOutput == 'ResponseSpectrumOutput':
+                        periodVect = risultato.refs[::-1] ** -1
+                        PSAVect = risultato.values[::-1]
+                        currentDF = pd.DataFrame(np.array([periodVect, PSAVect])).T
+                    else:
+                        ascVect = risultato.refs
+                        ordVect = risultato.values
+                        currentDF = pd.DataFrame(np.array([ascVect, ordVect])).T
+
+                    currentEvent = fileName
+
+                    if currentOutput not in risultatiDict.keys():
+                        risultatiDict[currentOutput] = dict()
+                    if currentEvent not in risultatiDict[currentOutput].keys():
+                        risultatiDict[currentOutput][currentEvent] = pd.DataFrame(currentDF[0])
+
+                    risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
+
+            waitBar.setValue(numberProfile)
+            App.processEvents()
+
+        # Scrittura dei risultati
+
+        vociOutput = risultatiDict.keys()
+
+        for voce in vociOutput:
+            currentOutput = voce
+            currentValues = risultatiDict[voce]
+            currentExcelFile = os.path.join(outputFolder, "{}.xlsx".format(currentOutput))
+
+            firstIter = True
+            for evento in risultatiDict[voce].keys():
+                if firstIter:
+                    writeMode = 'w'
                 else:
-                    ascVect = risultato.refs
-                    ordVect = risultato.values
-                    excelContent = pd.DataFrame(np.array([ascVect, ordVect])).T
-                    if currentOutput == 'AccelerationTSOutput':
-                        columnsName = ['Time [s]', 'Acc [g]']
-                    elif currentOutput == 'StrainTSOutput':
-                        columnsName = ['Time [s]', 'Strain']
-                    else:
-                        columnsName = ['1', '2']
+                    writeMode = 'a'
 
-                excelFile = os.path.join(outputFolder, currentOutput + '.xlsx')
-                currentEvent = fileName
-                excelContent.columns = columnsName
-                try:
-                    if firstIter:
-                        with pd.ExcelWriter(excelFile, mode='w') as writer:
-                            excelContent.to_excel(writer, sheet_name=currentEvent, index=False)
-                    else:
-                        with pd.ExcelWriter(excelFile, mode='a') as writer:
-                            excelContent.to_excel(writer, sheet_name=currentEvent, index=True)
-                except PermissionError:
-                    msg = "An error occurred while saving Excel file.\nPlease check if the file is open and try again"
-                    QMessageBox.critical(QMessageBox(), "Check Excel file", msg)
-                    return None
-            firstIter = False
-            analysisCounter += 1
+                with pd.ExcelWriter(currentExcelFile, mode=writeMode) as writer:
+                    risultatiDict[voce][evento].to_excel(writer, sheet_name=evento, index=False)
+                firstIter = False
 
+        # Writing profile table
+        profiliExcelFile = os.path.join(outputFolder, 'Profiles.xlsx')
+        profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
+        A = 5
         QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, outputList):
