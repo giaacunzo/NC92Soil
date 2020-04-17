@@ -35,15 +35,19 @@ def calcPermutations(profileList, returnpermutations=False):
     soilBricks = [strato[1] for strato in profileList]
     uniqueSoil = sorted(set(soilBricks))
 
-    occurrenceList = [soilBricks.count(elemento) for elemento in uniqueSoil]
+    totalHeight = sum([element[0] for element in profileList])
+    profileSum = list()
+    for soil in uniqueSoil:
+        profileSum.append([soil, sum([element[0] for element in profileList if element[1] == soil])])
+
+    percentageList = [(value[0], 100*value[1]/totalHeight) for value in profileSum]
 
     # Computing real number of combinations
     profileTuple = [tuple(elemento) for elemento in profileList]
     uniqueBricks = set(profileTuple)
     bricksOccurrence = [profileTuple.count(elemento) for elemento in uniqueBricks]
 
-    percStrings = ["{}: {:.1f}%".format(name, 100*occurrence/totalBricks)
-                   for name, occurrence in zip(uniqueSoil, occurrenceList)]
+    percStrings = ["{}: {:.1f}%".format(*value) for value in percentageList]
     finalString = " , ".join(percStrings)
 
     denomFact = np.prod([np.math.factorial(occurrence) for occurrence in bricksOccurrence])
