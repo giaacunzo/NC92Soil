@@ -146,7 +146,7 @@ def makeBricks(profileTable, brickSize):
     for riga in range(totalRows):
         currentThickness = float(profileTable.item(riga, 1).text())
         currentNameCell = profileTable.item(riga, 2)
-        currentVelocity = float(profileTable.item(riga, 3).text()) if profileTable.item(riga, 3) is not None else 0
+        # currentVelocity = float(profileTable.item(riga, 3).text()) if profileTable.item(riga, 3) is not None else 0
         currentName = profileTable.item(riga, 2).text() if currentNameCell is not None else 'N/D'
         numberBricks = int(np.floor(currentThickness/brickSize))
 
@@ -155,7 +155,7 @@ def makeBricks(profileTable, brickSize):
                 stratoThickness = brickSize
             else:
                 stratoThickness = currentThickness - brickSize*(numberBricks - 1)
-            newProfile.append([stratoThickness, currentName, currentVelocity])
+            newProfile.append([stratoThickness, currentName])
     return newProfile
 
 
@@ -173,9 +173,14 @@ def table2list(soilTable, profileTable):
     for riga in range(soilTable.rowCount()):
         currentSoilName = soilTable.item(riga, 0).text() if soilTable.item(riga, 0) is not None else ''
         currentSoilWeight = soilTable.item(riga, 1).text() if soilTable.item(riga, 1) is not None else ''
-        currentCurve = soilTable.cellWidget(riga, 2).currentText()
+        currentSoilVs_From = soilTable.item(riga, 2).text() if soilTable.item(riga, 2) is not None else ''
+        currentSoilVs_To = soilTable.item(riga, 3).text() if soilTable.item(riga, 3) is not None else 1e4
+        currentVs = soilTable.item(riga, 4).text() if soilTable.item(riga, 4) is not None else ''
+        currentCurve = soilTable.cellWidget(riga, 5).currentText()
+
         try:
-            soilList.append([currentSoilName, float(currentSoilWeight), currentCurve])
+            soilList.append([currentSoilName, float(currentSoilWeight), currentSoilVs_From, currentSoilVs_To,
+                             float(currentVs), currentCurve])
         except ValueError:
             soilList = 'SoilNan'
             break
@@ -185,10 +190,9 @@ def table2list(soilTable, profileTable):
         currentDepth = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
         currentThickness = profileTable.item(riga, 1).text() if profileTable.item(riga, 0) is not None else ''
         currentSoilName = profileTable.item(riga, 2).text() if profileTable.item(riga, 2) is not None else ''
-        currentVelocity = profileTable.item(riga, 3).text() if profileTable.item(riga, 3) is not None else ''
 
         try:
-            profileList.append([float(currentThickness), currentSoilName, float(currentVelocity)])
+            profileList.append([float(currentThickness), currentSoilName])
         except ValueError:
             profileList = 'ProfileNan'
             break

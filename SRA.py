@@ -66,7 +66,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if tableName.split('_')[-1] == 'Soil':
             curveComboBox = QComboBox(self)
             curveComboBox.addItems(self.curveDB.keys())
-            currentTable.setCellWidget(currentRow, 2, curveComboBox)
+            currentTable.setCellWidget(currentRow, 5, curveComboBox)
 
         elif tableName.split('_')[-1] == 'Profile':
             if currentRow == 0:  # Inserimento prima riga
@@ -145,9 +145,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.plainTextEdit_overview.setEnabled(False)
 
     def loadTH(self):
-        # timeHistoryFile = QFileDialog.getOpenFileName(self, caption="Choose input motion file")[0]
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
-        A = 5
         if len(timeHistoryFiles) == 0:
             return None
 
@@ -171,9 +169,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentMaxFreq = currentWaveLength = -1
 
         analysisType = self.comboBox_analysisType.currentText()
-
         soilList, profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)
-
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
                       self.checkBox_outStrain.isChecked()]
         outputParam = [float(x.text())
@@ -193,6 +189,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if outputFolder == '':
             return None
 
+    # RIPARTIRE DA QUI
         if analysisType == 'Permutations':
             brickSize = float(self.lineEdit_brickSize.text())
             brickProfile = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
@@ -308,11 +305,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         # Controllo valori non validi
         if soilList == 'SoilNan':
-            msg = "The unit weight in soil table must be a numeric value"
+            msg = "The unit weight and velocity in soil table must be a numeric value"
             QMessageBox.warning(QMessageBox(), "Check soil", msg)
             return None
         elif profileList == 'ProfileNan':
-            msg = "Layer thickness and velocity in profile table must be numeric value"
+            msg = "Layer thickness in profile table must be numeric value"
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
             return None
 
