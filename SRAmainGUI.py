@@ -3,16 +3,16 @@
 ################################################################################
 ## Form generated from reading UI file 'SRAmainGUI.ui'
 ##
-## Created by: Qt User Interface Compiler version 5.14.1
+## Created by: Qt User Interface Compiler version 5.14.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import (QCoreApplication, QMetaObject, QObject, QPoint,
-    QRect, QSize, QUrl, Qt)
+from PySide2.QtCore import (QCoreApplication, QDate, QDateTime, QMetaObject,
+    QObject, QPoint, QRect, QSize, QTime, QUrl, Qt)
 from PySide2.QtGui import (QBrush, QColor, QConicalGradient, QCursor, QFont,
-    QFontDatabase, QIcon, QLinearGradient, QPalette, QPainter, QPixmap,
-    QRadialGradient)
+    QFontDatabase, QIcon, QKeySequence, QLinearGradient, QPalette, QPainter,
+    QPixmap, QRadialGradient)
 from PySide2.QtWidgets import *
 
 from mplwidget import MplWidget
@@ -20,7 +20,7 @@ from mplwidget import MplWidget
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
-        if MainWindow.objectName():
+        if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.resize(1216, 877)
         self.centralwidget = QWidget(MainWindow)
@@ -46,6 +46,7 @@ class Ui_MainWindow(object):
         self.tableWidget_Soil.setObjectName(u"tableWidget_Soil")
         self.tableWidget_Soil.setGeometry(QRect(490, 60, 551, 192))
         self.tableWidget_Soil.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.tableWidget_Soil.verticalHeader().setDefaultSectionSize(30)
         self.pushButton_addSoil = QPushButton(self.centralwidget)
         self.pushButton_addSoil.setObjectName(u"pushButton_addSoil")
         self.pushButton_addSoil.setGeometry(QRect(1070, 90, 93, 28))
@@ -71,6 +72,7 @@ class Ui_MainWindow(object):
         self.tableWidget_Profile.setObjectName(u"tableWidget_Profile")
         self.tableWidget_Profile.setGeometry(QRect(490, 330, 551, 192))
         self.tableWidget_Profile.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.tableWidget_Profile.verticalHeader().setDefaultSectionSize(30)
         self.label_profileProp = QLabel(self.centralwidget)
         self.label_profileProp.setObjectName(u"label_profileProp")
         self.label_profileProp.setGeometry(QRect(490, 300, 101, 16))

@@ -168,19 +168,38 @@ def addDepths(profileList):
     return newProfile
 
 
+def addVariableProperties(soilList, profileList):
+    # Expanding soil list
+    newSoilList = list()
+    for indice, layer in enumerate(profileList):
+        currentCentroid = layer[0] + layer[1] / 2
+        currentSoilName = layer[2]
+        currentSoilDef = [row for row in soilList
+                          if (row[0] == currentSoilName and row[2] <= currentCentroid < row[3])][0]
+        newSoilName = '{}[{}]'.format(currentSoilDef[0], indice)
+        newSoilRow = [newSoilName, currentSoilDef[1], currentSoilDef[-1]]
+        newSoilList.append(newSoilRow)
+
+        # Adding velocity to current profile table and changing soil name
+        layer[-1] = newSoilName
+        layer.append(currentSoilDef[4])
+
+    return newSoilList, profileList
+
+
 def table2list(soilTable, profileTable):
     soilList = list()
     for riga in range(soilTable.rowCount()):
         currentSoilName = soilTable.item(riga, 0).text() if soilTable.item(riga, 0) is not None else ''
         currentSoilWeight = soilTable.item(riga, 1).text() if soilTable.item(riga, 1) is not None else ''
-        currentSoilVs_From = soilTable.item(riga, 2).text() if soilTable.item(riga, 2) is not None else ''
+        currentSoilVs_From = soilTable.item(riga, 2).text() if soilTable.item(riga, 2) is not None else 0
         currentSoilVs_To = soilTable.item(riga, 3).text() if soilTable.item(riga, 3) is not None else 1e4
         currentVs = soilTable.item(riga, 4).text() if soilTable.item(riga, 4) is not None else ''
         currentCurve = soilTable.cellWidget(riga, 5).currentText()
 
         try:
-            soilList.append([currentSoilName, float(currentSoilWeight), currentSoilVs_From, currentSoilVs_To,
-                             float(currentVs), currentCurve])
+            soilList.append([currentSoilName, float(currentSoilWeight), float(currentSoilVs_From),
+                             float(currentSoilVs_To), float(currentVs), currentCurve])
         except ValueError:
             soilList = 'SoilNan'
             break

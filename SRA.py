@@ -123,7 +123,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.userModified = True
 
     def viewTH(self):
-        currentData = self.inputMotion[self.comboBox_eventList.currentText()]
+        try:
+            currentData = self.inputMotion[self.comboBox_eventList.currentText()]
+        except KeyError:  # Combobox has been cleaned
+            return
+
         if not getattr(self.graphWidget_TH, 'axes', False):
             self.graphWidget_TH.axes = self.graphWidget_TH.figure.add_subplot(111)
 
@@ -156,9 +160,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         currentUnits = self.comboBox_Units.currentText()
 
-        inputMotionDict = SRALib.loadTH(timeHistoryFiles, currentFS, currentUnits)  # RIPARTIRE DA QUI
+        inputMotionDict = SRALib.loadTH(timeHistoryFiles, currentFS, currentUnits)
         self.inputMotion = inputMotionDict
+        self.comboBox_eventList.clear()
         self.comboBox_eventList.addItems(inputMotionDict.keys())
+        self.comboBox_eventList.setCurrentIndex(0)
         self.comboBox_eventList.setEnabled(True)
 
     def runAnalysis(self):
@@ -189,7 +195,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if outputFolder == '':
             return None
 
-    # RIPARTIRE DA QUI
         if analysisType == 'Permutations':
             brickSize = float(self.lineEdit_brickSize.text())
             brickProfile = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
@@ -229,18 +234,19 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
             waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
 
-            profileList = SRALib.addDepths(profiloCorrente)  # Aggiunge le profondità per il profilo corrente
+            profileList = SRALib.addDepths(profiloCorrente)  # Add depths to current profile
+            currentSoilList, profileList = SRALib.addVariableProperties(soilList, profileList)
             profileSoilNames = [strato[2] for strato in profileList]
             profileSoilThick = [str(strato[1]) for strato in profileList]
-            profileSoilDesc = ["{} - {} m".format(name, thickness)
-                               for name, thickness in zip(profileSoilNames, profileSoilThick)]
+            profileVs = [strato[-1] for strato in profileList]
+            profileSoilDesc = ["{} - {} m/s - {} m".format(name, vsValue, thickness)
+                               for name, vsValue, thickness in zip(profileSoilNames, profileVs, profileSoilThick)]
             profileCode = "P{}".format(numberProfile + 1)
-
             profiliDF[profileCode] = profileSoilDesc
 
             for fileName in currentData.keys():
 
-                OutputResult = SRALib.runAnalysis(currentData[fileName][0], soilList, profileList, analysisDB)
+                OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList, analysisDB)
 
                 # Esportazione output
                 for risultato in OutputResult:
