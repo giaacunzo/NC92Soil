@@ -1,6 +1,8 @@
 from warnings import filterwarnings
 
 filterwarnings('ignore', category=UserWarning)
+filterwarnings('ignore', category=RuntimeWarning)
+
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
@@ -33,6 +35,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.tableWidget_Soil.horizontalHeader().setStretchLastSection(True)
         self.tableWidget_Profile.resizeColumnsToContents()
         self.tableWidget_Profile.horizontalHeader().setStretchLastSection(True)
+        self.changeInputPanel()
 
         # Caricamento database curve di decadimento
         try:
@@ -52,7 +55,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_loadTH.clicked.connect(self.loadTH)
         self.pushButton_run.clicked.connect(self.runAnalysis)
         self.comboBox_eventList.currentIndexChanged.connect(self.viewTH)
+        self.comboBox_spectraList.currentIndexChanged.connect(self.viewSpectra)
         self.comboBox_analysisType.currentIndexChanged.connect(self.changeAnalysis)
+        self.comboBox_showWhat.currentIndexChanged.connect(self.viewSpectra)
+        self.comboBox_THorRVT.currentIndexChanged.connect(self.changeInputPanel)
+        self.pushButton_loadSpectra.clicked.connect(self.loadSpectra)
+        self.checkBox_xlog.stateChanged.connect(self.viewSpectra)
+        self.checkBox_ylog.stateChanged.connect(self.viewSpectra)
+
 
     def addRow(self):
         senderName = self.sender().objectName()
@@ -137,7 +147,34 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.lineEdit_FS.setText(str(1 / currentData[0].time_step))
         self.comboBox_Units.setCurrentText(currentData[-1])
 
-        pass
+    def viewSpectra(self):
+        try:
+            currentData = self.inputMotion[self.comboBox_spectraList.currentText()]
+        except KeyError:  # Combobox has been cleaned
+            return
+
+        if not getattr(self.graphWidget_Spectrum, 'axes', False):
+            self.graphWidget_Spectrum.axes = self.graphWidget_Spectrum.figure.add_subplot(111)
+
+        xlog = self.checkBox_xlog.isChecked()
+        ylog = self.checkBox_ylog.isChecked()
+
+        whatToShow = self.comboBox_showWhat.currentText()
+
+        if whatToShow == 'Show RS':
+            # Passing the original spectrum and the event ID to drawer (index 1 and 2, respectively)
+            SRALib.drawSpectrum(currentData[1], currentData[2], self.graphWidget_Spectrum.axes,
+                                xlog=xlog, ylog=ylog)
+        else:
+            # Passing the computed input motion and the event ID to drawer (index 0 and 2, respectively)
+            SRALib.drawFAS(currentData[0], currentData[2], self.graphWidget_Spectrum.axes,
+                           xlog=xlog, ylog=ylog)
+
+        self.graphWidget_Spectrum.draw()
+
+        self.lineEdit_duration.setText(str(currentData[0].duration))
+        self.lineEdit_damping.setText(str(currentData[3]))
+        self.comboBox_Units.setCurrentText(currentData[4])
 
     def changeAnalysis(self):
         currentData = self.comboBox_analysisType.currentText()
@@ -147,6 +184,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             self.lineEdit_brickSize.setEnabled(False)
             self.plainTextEdit_overview.setEnabled(False)
+
+    def changeInputPanel(self):
+        if self.comboBox_THorRVT.currentText() == 'RVT':
+            self.groupBox_TH.hide()
+            self.groupBox_RVT.show()
+        else:
+            self.groupBox_RVT.hide()
+            self.groupBox_TH.show()
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
@@ -166,6 +211,37 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_eventList.addItems(inputMotionDict.keys())
         self.comboBox_eventList.setCurrentIndex(0)
         self.comboBox_eventList.setEnabled(True)
+
+    def loadSpectra(self):
+        spectraFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
+        if len(spectraFiles) == 0:
+            return None
+        currentUnits = self.comboBox_SpectraUnits.currentText()
+
+        try:
+            Duration = float(self.lineEdit_duration.text())
+            Damping = float(self.lineEdit_damping.text())
+        except ValueError:
+            msg = "Damping and duration must be numeric values"
+            QMessageBox.warning(QMessageBox(), "Check values", msg)
+            return None
+
+        if Duration < 0:
+            msg = "Duration must be a positive value"
+            QMessageBox.warning(QMessageBox(), "Check duration", msg)
+            return None
+        elif any([Damping < 0, Damping > 100]):
+            msg = "Damping value must be in the range 0-100"
+            QMessageBox.warning(QMessageBox(), "Check damping", msg)
+            return None
+
+        inputMotionDict = SRALib.loadSpectra(spectraFiles, float(self.lineEdit_damping.text()),
+                                             float(self.lineEdit_duration.text()), currentUnits)
+        self.inputMotion = inputMotionDict
+        self.comboBox_spectraList.clear()
+        self.comboBox_spectraList.addItems(inputMotionDict.keys())
+        self.comboBox_spectraList.setCurrentIndex(0)
+        self.comboBox_spectraList.setEnabled(True)
 
     def runAnalysis(self):
         if self.checkBox_autoDiscretize.isChecked():
@@ -215,10 +291,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             profilePermutations = [profileList]
 
         currentData = self.inputMotion
-        analysisCounter = 1
+        # analysisCounter = 1
         totalMotions = len(currentData.keys())
         totalProfiles = len(profilePermutations)
-        totalAnalysis = totalProfiles*totalMotions
+        # totalAnalysis = totalProfiles*totalMotions
 
         risultatiDict = dict()
         profiliDF = pd.DataFrame()
@@ -295,7 +371,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # Writing profile table
         profiliExcelFile = os.path.join(outputFolder, 'Profiles.xlsx')
         profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
-        A = 5
         QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, outputList):

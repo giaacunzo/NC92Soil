@@ -4,6 +4,7 @@ import re
 import pysra
 import os
 from itertools import permutations
+from time import sleep
 
 
 def degradationCurves(fileName):
@@ -102,7 +103,6 @@ def drawProfile(profileList, asseGrafico, lineLength=0):
 def loadTH(fileNames, Fs, Units):
     conversionFactorList = {'cm/s^2': 1 / 980.665, 'm/s^2': 1 / 9.80665, 'g': 1}
 
-    inputMotionsList = list()
     THDict = dict()
 
     for fileName in fileNames:
@@ -123,12 +123,84 @@ def loadTH(fileNames, Fs, Units):
         conversionFactor = conversionFactorList[measureUnits]
         numericAcc = [conversionFactor * float(valore) for valore in Contenuto if
                       valore.replace('.', '').replace('-', '').isdigit()]
+
         inputMotion = pysra.motion.TimeSeriesMotion(
             os.path.split(fileName)[-1], eventID, timeStep, numericAcc)
 
         THDict[onlyName] = [inputMotion, eventID, timeStep, measureUnits]
 
     return THDict
+
+
+def loadSpectra(fileNames, Damping, Duration, Units):
+    conversionFactorList = {'cm/s^2': 1 / 980.665, 'm/s^2': 1 / 9.80665, 'g': 1}
+    SpectraDict = dict()
+
+    for filename in fileNames:
+        with open(filename) as spectrumFile:
+            Contenuto = spectrumFile.read().splitlines()
+
+        eventID = [re.findall(r'NAME:\s*(.*)', linea) for linea in Contenuto[:50] if linea.startswith('NAME')]
+        DampingTxt = [re.findall(r'DAMPING:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50] if linea.startswith('DAMPING')]
+        DurationTxt = [re.findall(r'DURATION:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50] if linea.startswith('DURATION')]
+        measureUnits = [re.findall(r'UNITS:\s*(.*)', linea) for linea in Contenuto[:50] if linea.startswith('UNITS')]
+
+        eventID = 'Input Spectrum' if len(eventID) == 0 else eventID[0][0]
+        Duration = Duration if len(DurationTxt) == 0 else float(DurationTxt[0][0])
+        Damping = Damping if len(DampingTxt) == 0 else float(DampingTxt[0][0])
+        measureUnits = Units if len(measureUnits) == 0 else measureUnits[0][0]
+
+        onlyName = os.path.basename(filename)
+
+        conversionFactor = conversionFactorList[measureUnits]
+
+        onlyValuesLines = [line for line in Contenuto if "\t" in line]
+        periodVect = [float(line.split('\t')[0]) for line in onlyValuesLines]
+        PSAVect = [conversionFactor * float(line.split('\t')[1]) for line in onlyValuesLines]
+
+        origSpectrum = [periodVect, PSAVect]
+
+        periodVect = [value if value != 0 else 1e-5 for value in periodVect]
+
+        # # Interpolating values under 0.02 (50Hz) to prevent numeric errors
+        # underThreshold = [(period, value)
+        #                   for period, value in zip(periodVect, PSAVect)
+        #                   if period < 0.02]
+        # firstOverThreshold = [(period, value)
+        #                       for period, value in zip(periodVect, PSAVect)
+        #                       if period >= 0.02][0]
+        #
+        # if len(underThreshold) > 0:
+        #     newFirstPSA = np.interp(0.02,
+        #                             [underThreshold[0][0], firstOverThreshold[0]],
+        #                             [underThreshold[0][1], firstOverThreshold[1]])
+        #     for period, value in underThreshold:
+        #         periodVect.remove(period)
+        #         PSAVect.remove(value)
+        #
+        #     periodVect.insert(0, 0.02)
+        #     PSAVect.insert(0, newFirstPSA)
+
+        # Switching to frequencies
+        # freqVect = np.array(periodVect[::-1]) ** -1
+        # PSAVect = np.array(PSAVect[::-1])
+        freqVect = np.array(periodVect) ** -1
+        PSAVect = np.array(PSAVect)
+
+        inputMotion = pysra.motion.CompatibleRvtMotion(freqVect, PSAVect,
+                                                       duration=Duration, osc_damping=Damping,
+                                                       window_len=None)
+
+        # Cutting high frequencies
+        minFreq = 0.05 / 2
+        maxFreq = 50 * 2
+
+        toTake = [minFreq <= valore <= maxFreq for valore in inputMotion.freqs]
+        inputMotion._fourier_amps = inputMotion.fourier_amps[toTake]
+        inputMotion._freqs = inputMotion.freqs[toTake]
+
+        SpectraDict[onlyName] = [inputMotion, origSpectrum, eventID, Damping, measureUnits]
+    return SpectraDict
 
 
 def drawTH(inputMotion, asseGrafico):
@@ -139,6 +211,53 @@ def drawTH(inputMotion, asseGrafico):
     asseGrafico.grid('on')
     asseGrafico.set_title(inputMotion.description)
 
+
+def drawSpectrum(inputSpectrum, eventID, asseGrafico, xlog=False, ylog=False):
+    asseGrafico.clear()
+    asseGrafico.plot(inputSpectrum[0], inputSpectrum[1])
+    asseGrafico.set_xlabel('Time [s]')
+    asseGrafico.set_ylabel('Acc [g]')
+    asseGrafico.grid('on')
+    asseGrafico.set_title(eventID)
+
+    # Applying scale to X axis
+    if xlog:
+        asseGrafico.set_xscale('log')
+    else:
+        asseGrafico.set_xscale('linear')
+
+    # Applying scale to Y axis
+    if ylog:
+        asseGrafico.set_yscale('log')
+    else:
+        asseGrafico.set_yscale('linear')
+
+
+def drawFAS(inputMotion, eventID, asseGrafico, xlog=False, ylog=False):
+    freqs = inputMotion.freqs
+    amplitudes = inputMotion.fourier_amps
+    asseGrafico.clear()
+    asseGrafico.plot(freqs, amplitudes)
+    asseGrafico.set_xlabel('Freq [Hz]')
+    asseGrafico.set_ylabel('Ampl [g-s]')
+
+    # Applying scale to X axis
+    if xlog:
+        asseGrafico.set_xscale('log')
+    else:
+        asseGrafico.set_xscale('linear')
+
+    # Applying scale to Y axis
+    if ylog:
+        asseGrafico.set_yscale('log')
+    else:
+        asseGrafico.set_yscale('linear')
+
+    asseGrafico.grid('on')
+    asseGrafico.set_title(eventID)
+    asseGrafico.set_xlim([0, 100])
+    asseGrafico.set_ylim(auto=True)
+    
 
 def makeBricks(profileTable, brickSize):
     totalRows = profileTable.rowCount()
