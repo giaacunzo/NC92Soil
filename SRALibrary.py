@@ -417,9 +417,35 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
     computationEngine(inputMotion, finalProfile, finalProfile.location('outcrop', index=-1))
     finalOutput(computationEngine)
 
+    # If brief output is checked computes pga, pgv and amplification factors
+    if outputList[3]:
+        getBriefValues(computationEngine, depth=outputParam[3])
+
     if waitBar is not None:
         waitBar.setLabelText('Running analysis...')
         waitBar.setValue(4)
         App.processEvents()
 
     return finalOutput
+
+
+def getBriefValues(computationObject, depth):
+    """
+    This function computes the fourier antitransform of the wave at a given depth and extract the desired parameters
+
+    :param computationObject:
+    :param depth:
+    :return:
+    """
+
+    motionType = 'outcrop' if depth == 0 else 'within'
+    sourceLocation = computationObject.profile.location('outcrop', index=-1)
+    outputLocation = computationObject.profile.location('within', index=0)
+    currentWaveAccTF = computationObject.calc_accel_tf(sourceLocation, outputLocation)
+    maxAcc = computationObject.motion.calc_peak(currentWaveAccTF)
+
+    # Computing fourier amplitude of velocities
+    currentWaveVelTF = np.multiply(currentWaveAccTF, computationObject.motion.angular_freqs ** -1)
+    maxVel = computationObject.motion.calc_peak(currentWaveVelTF)
+
+    # CONTINUARE DA QUI

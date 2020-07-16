@@ -63,7 +63,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.checkBox_xlog.stateChanged.connect(self.viewSpectra)
         self.checkBox_ylog.stateChanged.connect(self.viewSpectra)
 
-
     def addRow(self):
         senderName = self.sender().objectName()
         tableName = 'tableWidget_' + senderName.split('_add')[-1]
@@ -189,9 +188,23 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if self.comboBox_THorRVT.currentText() == 'RVT':
             self.groupBox_TH.hide()
             self.groupBox_RVT.show()
+
+            # Disabling TH based outputs
+            self.checkBox_outStrain.setEnabled(False)
+            self.checkBox_outStrain.setChecked(False)
+            self.checkBox_outAcc.setEnabled(False)
+            self.checkBox_outAcc.setChecked(False)
+            self.lineEdit_accDepth.setEnabled(False)
+            self.lineEdit_strainDepth.setEnabled(False)
         else:
             self.groupBox_RVT.hide()
             self.groupBox_TH.show()
+
+            # Enabling TH based outputs
+            self.checkBox_outStrain.setEnabled(True)
+            self.checkBox_outAcc.setEnabled(True)
+            self.lineEdit_accDepth.setEnabled(True)
+            self.lineEdit_strainDepth.setEnabled(True)
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
@@ -253,9 +266,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         analysisType = self.comboBox_analysisType.currentText()
         soilList, profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
-                      self.checkBox_outStrain.isChecked()]
+                      self.checkBox_outStrain.isChecked(), self.checkBox_outBrief.isChecked()]
         outputParam = [float(x.text())
-                       for x in [self.lineEdit_RSDepth, self.lineEdit_accDepth, self.lineEdit_strainDepth]]
+                       for x in [self.lineEdit_RSDepth, self.lineEdit_accDepth, self.lineEdit_strainDepth,
+                                 self.lineEdit_briefDepth]]
         LECalcOptions = [float(x.text())
                          for x in [self.lineEdit_strainRatio, self.lineEdit_maxTol, self.lineEdit_maxIter]]
         checkPreliminari = self.preAnalysisChecks(soilList, profileList, outputList)
@@ -406,7 +420,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
             return None
         elif len(self.inputMotion) == 0:
-            msg = "Import an input time history before running analysis"
+            msg = "Import an input time history or a target spectrum before running analysis"
             QMessageBox.warning(QMessageBox(), "Check input", msg)
             return None
         elif not any(outputList):
