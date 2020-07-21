@@ -23,6 +23,8 @@ class Ui_MainWindow(object):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.resize(1323, 901)
+        self.actionAbout = QAction(MainWindow)
+        self.actionAbout.setObjectName(u"actionAbout")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.graphWidget = MplWidget(self.centralwidget)
@@ -151,9 +153,10 @@ class Ui_MainWindow(object):
         self.checkBox_outBrief.setObjectName(u"checkBox_outBrief")
         self.checkBox_outBrief.setEnabled(True)
         self.checkBox_outBrief.setGeometry(QRect(20, 110, 151, 20))
+        self.checkBox_outBrief.setChecked(True)
         self.lineEdit_briefDepth = QLineEdit(self.groupBox_output)
         self.lineEdit_briefDepth.setObjectName(u"lineEdit_briefDepth")
-        self.lineEdit_briefDepth.setEnabled(True)
+        self.lineEdit_briefDepth.setEnabled(False)
         self.lineEdit_briefDepth.setGeometry(QRect(200, 110, 91, 22))
         self.label_17 = QLabel(self.groupBox_output)
         self.label_17.setObjectName(u"label_17")
@@ -365,7 +368,12 @@ class Ui_MainWindow(object):
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
         self.menubar.setGeometry(QRect(0, 0, 1323, 26))
+        self.menu = QMenu(self.menubar)
+        self.menu.setObjectName(u"menu")
         MainWindow.setMenuBar(self.menubar)
+
+        self.menubar.addAction(self.menu.menuAction())
+        self.menu.addAction(self.actionAbout)
 
         self.retranslateUi(MainWindow)
 
@@ -374,6 +382,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"NC92-Soil", None))
+        self.actionAbout.setText(QCoreApplication.translate("MainWindow", u"About", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)
@@ -478,5 +487,6 @@ class Ui_MainWindow(object):
 
         self.checkBox_xlog.setText(QCoreApplication.translate("MainWindow", u"X log scale", None))
         self.checkBox_ylog.setText(QCoreApplication.translate("MainWindow", u"Y log scale", None))
+        self.menu.setTitle(QCoreApplication.translate("MainWindow", u"?", None))
     # retranslateUi
 

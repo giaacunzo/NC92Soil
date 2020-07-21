@@ -3,8 +3,8 @@ import pandas as pd
 import re
 import pysra
 import os
+import SRAClasses
 from itertools import permutations
-from time import sleep
 
 
 def degradationCurves(fileName):
@@ -411,15 +411,30 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
     if outputList[2]:  # Strains
         outputObject.append(pysra.output.StrainTSOutput(
             pysra.output.OutputLocation('within', depth=outputParam[2]), in_percent=True))
+    if outputList[3]:  # Brief report
+        outputObject.append(SRAClasses.BriefReportOutput(outputDepth=outputParam[3]))
+        # Computing RS at bedrock level
+        outputObject.append(pysra.output.ResponseSpectrumOutput(
+            freqRange, pysra.output.OutputLocation('outcrop', index=-1),
+            osc_damping=0.05))
 
     finalOutput = pysra.output.OutputCollection(outputObject)
 
     computationEngine(inputMotion, finalProfile, finalProfile.location('outcrop', index=-1))
     finalOutput(computationEngine)
 
-    # If brief output is checked computes pga, pgv and amplification factors
+    # If brief output is checked adds amplification factors using computed RS
     if outputList[3]:
-        getBriefValues(computationEngine, depth=outputParam[3])
+        BriefObject = [briefOutput for briefOutput in finalOutput.outputs
+                       if type(briefOutput) == SRAClasses.BriefReportOutput][0]
+        RSObjects = [RSObj for RSObj in finalOutput.outputs if type(RSObj) == pysra.output.ResponseSpectrumOutput]
+        BriefObject.computeAF(RSObjects)
+
+        # Deleting spectrum at bedrock level to prevent export
+        inputSpecIndex = [index for index, value in enumerate(finalOutput.outputs)
+                          if type(value) == pysra.output.ResponseSpectrumOutput and
+                          value.location.index == -1][0]
+        finalOutput.outputs.pop(inputSpecIndex)
 
     if waitBar is not None:
         waitBar.setLabelText('Running analysis...')
@@ -449,3 +464,4 @@ def getBriefValues(computationObject, depth):
     maxVel = computationObject.motion.calc_peak(currentWaveVelTF)
 
     # CONTINUARE DA QUI
+

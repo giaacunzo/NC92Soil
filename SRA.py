@@ -11,6 +11,25 @@ import sys
 import SRALibrary as SRALib
 import pandas as pd
 import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
+
+from pygame import mixer, error as pygameexception
+
+
+def aboutMessage():
+    mixer.init()
+    Messaggio = QMessageBox()
+    Messaggio.setText("NC92-Soil\nversion 0.1 beta\n"
+                      "\nCNR IGAG")
+    Messaggio.setWindowTitle("NC92-Soil")
+    try:
+        mixer.music.load('about.mp3')
+        mixer.music.play()
+    except pygameexception:
+        pass
+    mixer.music.set_volume(0.5)
+    Messaggio.exec_()
+    mixer.music.stop()
 
 
 # noinspection PyCallByClass
@@ -62,6 +81,20 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_loadSpectra.clicked.connect(self.loadSpectra)
         self.checkBox_xlog.stateChanged.connect(self.viewSpectra)
         self.checkBox_ylog.stateChanged.connect(self.viewSpectra)
+        self.lineEdit_RSDepth.textChanged.connect(self.updateOutputInfo)
+        self.checkBox_outBrief.stateChanged.connect(self.updateOutputInfo)
+        self.checkBox_outRS.stateChanged.connect(self.updateOutputInfo)
+        self.actionAbout.triggered.connect(aboutMessage)
+
+    def updateOutputInfo(self):
+        if self.sender() is self.lineEdit_RSDepth:
+            self.lineEdit_briefDepth.setText(self.sender().text())
+        elif self.sender() is self.checkBox_outBrief:
+            if self.sender().isChecked():
+                self.checkBox_outRS.setChecked(True)
+        elif self.sender() is self.checkBox_outRS:
+            if not self.sender().isChecked():
+                self.checkBox_outBrief.setChecked(False)
 
     def addRow(self):
         senderName = self.sender().objectName()
@@ -196,6 +229,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.checkBox_outAcc.setChecked(False)
             self.lineEdit_accDepth.setEnabled(False)
             self.lineEdit_strainDepth.setEnabled(False)
+            self.checkBox_outBrief.setEnabled(True)
         else:
             self.groupBox_RVT.hide()
             self.groupBox_TH.show()
@@ -205,6 +239,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.checkBox_outAcc.setEnabled(True)
             self.lineEdit_accDepth.setEnabled(True)
             self.lineEdit_strainDepth.setEnabled(True)
+            self.checkBox_outBrief.setEnabled(False)
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
@@ -345,6 +380,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                         periodVect = risultato.refs[::-1] ** -1
                         PSAVect = risultato.values[::-1]
                         currentDF = pd.DataFrame(np.array([periodVect, PSAVect])).T
+                    elif currentOutput == 'BriefReportOutput':
+                        ascVect = risultato.refs
+                        ordVect = risultato.values
+                        currentDF = pd.DataFrame(ordVect).T
+                        currentDF.columns = ascVect
                     else:
                         ascVect = risultato.refs
                         ordVect = risultato.values
@@ -355,9 +395,21 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     if currentOutput not in risultatiDict.keys():
                         risultatiDict[currentOutput] = dict()
                     if currentEvent not in risultatiDict[currentOutput].keys():
-                        risultatiDict[currentOutput][currentEvent] = pd.DataFrame(currentDF[0])
+                        if currentOutput != 'BriefReportOutput':
+                            risultatiDict[currentOutput][currentEvent] = pd.DataFrame(currentDF[0])
+                        else:
+                            risultatiDict[currentOutput][currentEvent] = pd.DataFrame(columns=risultato.refs)
 
-                    risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
+                    if currentOutput == 'BriefReportOutput':
+                        newRow = pd.DataFrame(columns=risultato.refs)
+                        # newRow = newRow.astype('float64')
+                        # newRow['Shallow soil name'] = newRow.astype('str')
+                        newRow.loc[0] = risultato.values
+                        newRow.index = [profileCode]
+                        risultatiDict[currentOutput][currentEvent] = \
+                            risultatiDict[currentOutput][currentEvent].append(newRow.loc[profileCode])
+                    else:
+                        risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
 
             waitBar.setValue(numberProfile)
             App.processEvents()
@@ -368,6 +420,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         for voce in vociOutput:
             currentOutput = voce
+            writeIndex = True if currentOutput == 'BriefReportOutput' else False
             currentValues = risultatiDict[voce]
             currentExcelFile = os.path.join(outputFolder, "{}.xlsx".format(currentOutput))
 
@@ -379,7 +432,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     writeMode = 'a'
 
                 with pd.ExcelWriter(currentExcelFile, mode=writeMode) as writer:
-                    risultatiDict[voce][evento].to_excel(writer, sheet_name=evento, index=False)
+                    risultatiDict[voce][evento].to_excel(writer, sheet_name=evento, index=writeIndex)
                 firstIter = False
 
         # Writing profile table
