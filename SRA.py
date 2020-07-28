@@ -98,7 +98,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def addRow(self):
         senderName = self.sender().objectName()
-        tableName = 'tableWidget_' + senderName.split('_add')[-1]
+
+        if senderName == 'pushButton_addProfile' and self.comboBox_analysisType.currentText() == 'Permutations':
+            tableName = 'tableWidget_Permutations'
+        else:
+            tableName = 'tableWidget_' + senderName.split('_add')[-1]
         currentTable = getattr(self, tableName)
         currentRow = currentTable.rowCount()
         currentTable.insertRow(currentRow)
@@ -111,15 +115,16 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentTable.setCellWidget(currentRow, 5, curveComboBox)
 
         elif tableName.split('_')[-1] == 'Profile':
-            if currentRow == 0:  # Inserimento prima riga
-                currentTable.setItem(currentRow, 0, QTableWidgetItem('0.00'))
-                currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
-            else:
-                currentDepth = float(currentTable.item(currentRow - 1, 0).text()) + \
-                               float(currentTable.item(currentRow - 1, 1).text())
-                currentTable.setItem(currentRow, 0, QTableWidgetItem(str(currentDepth)))
-                currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
-            currentTable.item(currentRow, 0).setFlags(QtCore.Qt.ItemIsEnabled)
+            if self.comboBox_analysisType.currentText() == 'Regular analysis':
+                if currentRow == 0:  # Inserimento prima riga
+                    currentTable.setItem(currentRow, 0, QTableWidgetItem('0.00'))
+                    currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
+                else:
+                    currentDepth = float(currentTable.item(currentRow - 1, 0).text()) + \
+                                   float(currentTable.item(currentRow - 1, 1).text())
+                    currentTable.setItem(currentRow, 0, QTableWidgetItem(str(currentDepth)))
+                    currentTable.setItem(currentRow, 1, QTableWidgetItem('0.00'))
+                currentTable.item(currentRow, 0).setFlags(QtCore.Qt.ItemIsEnabled)
 
         self.userModified = True
 
@@ -137,18 +142,20 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         currentAnalysis = self.comboBox_analysisType.currentText()
         brickSize = float(self.lineEdit_brickSize.text())
+        bedrockDepth = float(self.lineEdit_bedDepth.text())
         if currentAnalysis == 'Permutations':
-            profileList = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
+            profileList = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
             totalPermutations, percString, uniqueBricks = SRALib.calcPermutations(profileList)
 
             # Writing informations in the overview console
-            messageString = "Total bricks: {} - Minimum brick size: {}m - Brick types: {}\nSoil composition -> {}\n" \
+            messageString = "Total bricks: {} - Minimum brick size: {}m - Brick types: {}\nSoil percentage -> {}\n" \
                             "Total permutations: {}".format(len(profileList), brickSize, uniqueBricks, percString,
                                                             "{:,}".format(int(totalPermutations)).replace(',', "'")
                                                             )
             self.plainTextEdit_overview.setPlainText(messageString)
         else:
-            profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)[1]
+            profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile,
+                                            self.tableWidget_Permutations)[1]
 
         SRALib.drawProfile(profileList, self.graphWidget.axes)
         self.graphWidget.draw()
@@ -213,9 +220,17 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if currentData == 'Permutations':
             self.lineEdit_brickSize.setEnabled(True)
             self.plainTextEdit_overview.setEnabled(True)
+            self.lineEdit_bedDepth.setEnabled(True)
+            self.tableWidget_Permutations.show()
+            self.tableWidget_Profile.hide()
+            self.label_profileProp.setText('Soil percentage')
         else:
             self.lineEdit_brickSize.setEnabled(False)
             self.plainTextEdit_overview.setEnabled(False)
+            self.lineEdit_bedDepth.setEnabled(False)
+            self.tableWidget_Permutations.hide()
+            self.tableWidget_Profile.show()
+            self.label_profileProp.setText('Profile')
 
     def changeInputPanel(self):
         if self.comboBox_THorRVT.currentText() == 'RVT':
@@ -299,7 +314,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentMaxFreq = currentWaveLength = -1
 
         analysisType = self.comboBox_analysisType.currentText()
-        soilList, profileList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile)
+        soilList, profileList, permutationList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile,
+                                                                   self.tableWidget_Permutations)
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
                       self.checkBox_outStrain.isChecked(), self.checkBox_outBrief.isChecked()]
         outputParam = [float(x.text())
@@ -307,7 +323,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                  self.lineEdit_briefDepth]]
         LECalcOptions = [float(x.text())
                          for x in [self.lineEdit_strainRatio, self.lineEdit_maxTol, self.lineEdit_maxIter]]
-        checkPreliminari = self.preAnalysisChecks(soilList, profileList, outputList)
+        checkPreliminari = self.preAnalysisChecks(soilList, profileList, permutationList, outputList)
         if checkPreliminari is None:
             return None
 
@@ -321,8 +337,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             return None
 
         if analysisType == 'Permutations':
+            bedrockDepth = float(self.lineEdit_bedDepth.text())
             brickSize = float(self.lineEdit_brickSize.text())
-            brickProfile = SRALib.makeBricks(self.tableWidget_Profile, brickSize)
+            brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
             numberPermutations = SRALib.calcPermutations(brickProfile)[0]
 
             waitBar = QProgressDialog("Generating {} permutations..".format(int(numberPermutations)), "Cancel", 0, 1)
@@ -440,15 +457,21 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
         QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
-    def preAnalysisChecks(self, soilList, profileList, outputList):
+    def preAnalysisChecks(self, soilList, profileList, permutationList, outputList):
+        currentAnalysis = self.comboBox_analysisType.currentText()
+
         # Controllo campi vuoti
         if len(soilList) == 0:
             msg = "Soil table cannot be empty"
             QMessageBox.warning(QMessageBox(), "Check soil", msg)
             return None
-        elif len(profileList) == 0:
+        elif len(profileList) == 0 and currentAnalysis == 'Regular analysis':
             msg = "Profile table cannot be empty"
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+        elif len(permutationList) == 0 and currentAnalysis == 'Permutations':
+            msg = "Soil percentage table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check soil percentage", msg)
             return None
 
         # Controllo valori non validi
@@ -456,20 +479,30 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             msg = "The unit weight and velocity in soil table must be a numeric value"
             QMessageBox.warning(QMessageBox(), "Check soil", msg)
             return None
-        elif profileList == 'ProfileNan':
+        elif profileList == 'ProfileNan' and currentAnalysis == 'Regular analysis':
             msg = "Layer thickness in profile table must be numeric value"
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+        elif permutationList == 'PermutationNan' and currentAnalysis == 'Permutations':
+            msg = "Percentages in soil percentage table must be numeric values"
+            QMessageBox.warning(QMessageBox(), "Check soil percentage", msg)
             return None
 
         # Check di completezza dati di input
         campiVuotiSuolo = [elemento == '' or elemento is None for riga in soilList for elemento in riga]
         campiVuotiProfilo = [elemento == '' or elemento is None for riga in profileList for elemento in riga]
+        campiVuotiPermutations = [elemento == '' or elemento is None for riga in permutationList for elemento in riga]
+
         if any(campiVuotiSuolo):
             msg = "Fields in soil table cannot be empty"
             QMessageBox.warning(QMessageBox(), "Check soil", msg)
             return None
-        elif any(campiVuotiProfilo):
+        elif any(campiVuotiProfilo) and currentAnalysis == 'Regular analysis':
             msg = "Fields in profile table cannot be empty"
+            QMessageBox.warning(QMessageBox(), "Check profile", msg)
+            return None
+        elif any(campiVuotiPermutations) and currentAnalysis == 'Permutations':
+            msg = "Fields in soil percentage table cannot be empty"
             QMessageBox.warning(QMessageBox(), "Check profile", msg)
             return None
         elif len(self.inputMotion) == 0:

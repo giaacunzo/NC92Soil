@@ -4,7 +4,7 @@ import numpy as np
 
 class BriefReportOutput(pysra.output.Output):
     """
-    Class for handling brief report as an output
+    New class for handling NC92Soil brief report as an output
     """
 
     def __init__(self, outputDepth, sourceDepth=-1):

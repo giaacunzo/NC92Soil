@@ -141,9 +141,12 @@ def loadSpectra(fileNames, Damping, Duration, Units):
             Contenuto = spectrumFile.read().splitlines()
 
         eventID = [re.findall(r'NAME:\s*(.*)', linea) for linea in Contenuto[:50] if linea.startswith('NAME')]
-        DampingTxt = [re.findall(r'DAMPING:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50] if linea.startswith('DAMPING')]
-        DurationTxt = [re.findall(r'DURATION:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50] if linea.startswith('DURATION')]
-        measureUnits = [re.findall(r'UNITS:\s*(.*)', linea) for linea in Contenuto[:50] if linea.startswith('UNITS')]
+        DampingTxt = [re.findall(r'DAMPING:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50]
+                      if linea.startswith('DAMPING')]
+        DurationTxt = [re.findall(r'DURATION:\s*(\d*\.*\d*)', linea) for linea in Contenuto[:50]
+                       if linea.startswith('DURATION')]
+        measureUnits = [re.findall(r'UNITS:\s*(.*)', linea) for linea in Contenuto[:50]
+                        if linea.startswith('UNITS')]
 
         eventID = 'Input Spectrum' if len(eventID) == 0 else eventID[0][0]
         Duration = Duration if len(DurationTxt) == 0 else float(DurationTxt[0][0])
@@ -159,31 +162,9 @@ def loadSpectra(fileNames, Damping, Duration, Units):
         PSAVect = [conversionFactor * float(line.split('\t')[1]) for line in onlyValuesLines]
 
         origSpectrum = [periodVect, PSAVect]
-
         periodVect = [value if value != 0 else 1e-5 for value in periodVect]
 
-        # # Interpolating values under 0.02 (50Hz) to prevent numeric errors
-        # underThreshold = [(period, value)
-        #                   for period, value in zip(periodVect, PSAVect)
-        #                   if period < 0.02]
-        # firstOverThreshold = [(period, value)
-        #                       for period, value in zip(periodVect, PSAVect)
-        #                       if period >= 0.02][0]
-        #
-        # if len(underThreshold) > 0:
-        #     newFirstPSA = np.interp(0.02,
-        #                             [underThreshold[0][0], firstOverThreshold[0]],
-        #                             [underThreshold[0][1], firstOverThreshold[1]])
-        #     for period, value in underThreshold:
-        #         periodVect.remove(period)
-        #         PSAVect.remove(value)
-        #
-        #     periodVect.insert(0, 0.02)
-        #     PSAVect.insert(0, newFirstPSA)
-
         # Switching to frequencies
-        # freqVect = np.array(periodVect[::-1]) ** -1
-        # PSAVect = np.array(PSAVect[::-1])
         freqVect = np.array(periodVect) ** -1
         PSAVect = np.array(PSAVect)
 
@@ -259,14 +240,14 @@ def drawFAS(inputMotion, eventID, asseGrafico, xlog=False, ylog=False):
     asseGrafico.set_ylim(auto=True)
     
 
-def makeBricks(profileTable, brickSize):
+def makeBricks(profileTable, brickSize, bedrockDepth):
     totalRows = profileTable.rowCount()
     newProfile = list()
     for riga in range(totalRows):
-        currentThickness = float(profileTable.item(riga, 1).text())
-        currentNameCell = profileTable.item(riga, 2)
-        # currentVelocity = float(profileTable.item(riga, 3).text()) if profileTable.item(riga, 3) is not None else 0
-        currentName = profileTable.item(riga, 2).text() if currentNameCell is not None else 'N/D'
+        currentPercentage = float(profileTable.item(riga, 1).text())
+        currentNameCell = profileTable.item(riga, 0)
+        currentName = profileTable.item(riga, 0).text() if currentNameCell is not None else 'N/D'
+        currentThickness = bedrockDepth * currentPercentage/100
         numberBricks = int(np.floor(currentThickness/brickSize))
 
         for strato in range(numberBricks):
@@ -306,7 +287,7 @@ def addVariableProperties(soilList, profileList):
     return newSoilList, profileList
 
 
-def table2list(soilTable, profileTable):
+def table2list(soilTable, profileTable, permutationTable):
     soilList = list()
     for riga in range(soilTable.rowCount()):
         currentSoilName = soilTable.item(riga, 0).text() if soilTable.item(riga, 0) is not None else ''
@@ -325,7 +306,7 @@ def table2list(soilTable, profileTable):
 
     profileList = list()
     for riga in range(profileTable.rowCount()):
-        currentDepth = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
+        # currentDepth = profileTable.item(riga, 0).text() if profileTable.item(riga, 0) is not None else ''
         currentThickness = profileTable.item(riga, 1).text() if profileTable.item(riga, 0) is not None else ''
         currentSoilName = profileTable.item(riga, 2).text() if profileTable.item(riga, 2) is not None else ''
 
@@ -335,7 +316,18 @@ def table2list(soilTable, profileTable):
             profileList = 'ProfileNan'
             break
 
-    return soilList, profileList
+    permutationList = list()
+    for riga in range(permutationTable.rowCount()):
+        currentSoilName = permutationTable.item(riga, 0).text() if permutationTable.item(riga, 0) is not None else ''
+        currentPercentage = permutationTable.item(riga, 1).text() if permutationTable.item(riga, 1) is not None else ''
+
+        try:
+            permutationList.append([currentSoilName, float(currentPercentage)])
+        except ValueError:
+            permutationList = 'PermutationNan'
+            break
+
+    return soilList, profileList, permutationList
 
 
 def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None):

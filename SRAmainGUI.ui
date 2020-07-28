@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1323</width>
-    <height>901</height>
+    <height>910</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -244,7 +244,7 @@
      <rect>
       <x>758</x>
       <y>530</y>
-      <width>55</width>
+      <width>71</width>
       <height>16</height>
      </rect>
     </property>
@@ -258,7 +258,7 @@
      <string>KN/m&lt;sup&gt;3&lt;/sup&gt;</string>
     </property>
     <property name="textFormat">
-     <enum>Qt::PlainText</enum>
+     <enum>Qt::RichText</enum>
     </property>
    </widget>
    <widget class="QLineEdit" name="lineEdit_bedVelocity">
@@ -764,7 +764,7 @@
    <widget class="QLabel" name="label_15">
     <property name="geometry">
      <rect>
-      <x>1170</x>
+      <x>1160</x>
       <y>330</y>
       <width>61</width>
       <height>16</height>
@@ -786,7 +786,7 @@
     </property>
     <property name="geometry">
      <rect>
-      <x>1240</x>
+      <x>1250</x>
       <y>330</y>
       <width>41</width>
       <height>22</height>
@@ -802,7 +802,7 @@
    <widget class="QLabel" name="label_16">
     <property name="geometry">
      <rect>
-      <x>1290</x>
+      <x>1300</x>
       <y>330</y>
       <width>21</width>
       <height>16</height>
@@ -1208,6 +1208,94 @@
      </property>
     </widget>
    </widget>
+   <widget class="QTableWidget" name="tableWidget_Permutations">
+    <property name="geometry">
+     <rect>
+      <x>600</x>
+      <y>330</y>
+      <width>551</width>
+      <height>191</height>
+     </rect>
+    </property>
+    <property name="sizeAdjustPolicy">
+     <enum>QAbstractScrollArea::AdjustToContents</enum>
+    </property>
+    <attribute name="verticalHeaderDefaultSectionSize">
+     <number>30</number>
+    </attribute>
+    <column>
+     <property name="text">
+      <string>Soil type</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Percentage</string>
+     </property>
+    </column>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_bedDepth">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>1250</x>
+      <y>360</y>
+      <width>41</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>Bedrock unit weight</string>
+    </property>
+    <property name="text">
+     <string>30</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_22">
+    <property name="geometry">
+     <rect>
+      <x>1300</x>
+      <y>360</y>
+      <width>21</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>m</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_23">
+    <property name="geometry">
+     <rect>
+      <x>1160</x>
+      <y>360</y>
+      <width>91</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Bedrock depth</string>
+    </property>
+   </widget>
+   <zorder>tableWidget_Permutations</zorder>
+   <zorder>tableWidget_Profile</zorder>
    <zorder>groupBox_TH</zorder>
    <zorder>groupBox_RVT</zorder>
    <zorder>graphWidget</zorder>
@@ -1215,7 +1303,6 @@
    <zorder>pushButton_addSoil</zorder>
    <zorder>label_SoilProp</zorder>
    <zorder>pushButton_removeSoil</zorder>
-   <zorder>tableWidget_Profile</zorder>
    <zorder>label_profileProp</zorder>
    <zorder>pushButton_removeProfile</zorder>
    <zorder>pushButton_addProfile</zorder>
@@ -1247,6 +1334,9 @@
    <zorder>label_16</zorder>
    <zorder>plainTextEdit_overview</zorder>
    <zorder>comboBox_THorRVT</zorder>
+   <zorder>lineEdit_bedDepth</zorder>
+   <zorder>label_22</zorder>
+   <zorder>label_23</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
