@@ -88,7 +88,7 @@
      <rect>
       <x>610</x>
       <y>30</y>
-      <width>101</width>
+      <width>511</width>
       <height>16</height>
      </rect>
     </property>
@@ -151,7 +151,7 @@
      <rect>
       <x>600</x>
       <y>300</y>
-      <width>101</width>
+      <width>541</width>
       <height>16</height>
      </rect>
     </property>
@@ -760,6 +760,11 @@
       <string>Permutations</string>
      </property>
     </item>
+    <item>
+     <property name="text">
+      <string>Batch analysis</string>
+     </property>
+    </item>
    </widget>
    <widget class="QLabel" name="label_15">
     <property name="geometry">
@@ -1294,8 +1299,22 @@
      <string>Bedrock depth</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="pushButton_loadBatch">
+    <property name="geometry">
+     <rect>
+      <x>1180</x>
+      <y>490</y>
+      <width>93</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Load batch file</string>
+    </property>
+   </widget>
    <zorder>tableWidget_Permutations</zorder>
    <zorder>tableWidget_Profile</zorder>
+   <zorder>pushButton_loadBatch</zorder>
    <zorder>groupBox_TH</zorder>
    <zorder>groupBox_RVT</zorder>
    <zorder>graphWidget</zorder>

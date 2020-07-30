@@ -1,5 +1,6 @@
 import pysra
 import numpy as np
+import pandas as pd
 
 
 class BriefReportOutput(pysra.output.Output):
@@ -101,3 +102,45 @@ class BriefReportOutput(pysra.output.Output):
 
         self._refs = refs
         self._values = values
+
+
+class BatchAnalyzer:
+    def __init__(self, filename):
+        currentSoils = pd.read_excel(filename, sheet_name='Soils')
+        currentClusters = pd.read_excel(filename, sheet_name='Clusters')
+
+        self._rawSoils = currentSoils
+        self._rawClusters = currentClusters
+        self.vsNumber = currentSoils['Vs\n[m/s]'][0].count(';') + 1
+        self.profileNumber = len(currentClusters)
+
+        self.getInputNames(0)
+
+    def getSoilTable(self, vsIndex):
+        soilTable = list()
+        for index, row in self._rawSoils.iterrows():
+            rowList = list(row)
+            rowList[4] = float(rowList[4].split(';')[vsIndex].strip())
+            rowList[2] = rowList[2] if not np.isnan(rowList[2]) else None  # From [m]
+            rowList[3] = rowList[3] if not np.isnan(rowList[3]) else None # To [m]
+            soilTable.append(rowList)
+        return soilTable
+
+    def getProfileInfo(self, profileIndex):
+        profileTable = list()
+        currentProfile = self._rawClusters.iloc[profileIndex, :]
+        bedrockDepth = currentProfile['Bedrock depth\n[m]']
+        brickSize = currentProfile['Brick thickness\n[m]']
+        soilNames = currentProfile.index[5:]
+
+        for soil in soilNames:
+            profileTable.append([soil, currentProfile[soil]])
+
+        return profileTable, bedrockDepth, brickSize
+
+    def getInputNames(self, profileIndex):
+        return [inputName.strip() for inputName in self._rawClusters.iloc[profileIndex][4].split(';')]
+
+    def getProfileName(self, profileIndex):
+        currentProfile = self._rawClusters.iloc[profileIndex, :2]
+        return "{}-{}".format(*currentProfile)

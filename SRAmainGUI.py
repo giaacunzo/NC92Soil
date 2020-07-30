@@ -22,7 +22,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1323, 901)
+        MainWindow.resize(1323, 910)
         self.actionAbout = QAction(MainWindow)
         self.actionAbout.setObjectName(u"actionAbout")
         self.centralwidget = QWidget(MainWindow)
@@ -54,7 +54,7 @@ class Ui_MainWindow(object):
         self.pushButton_addSoil.setGeometry(QRect(1180, 90, 93, 28))
         self.label_SoilProp = QLabel(self.centralwidget)
         self.label_SoilProp.setObjectName(u"label_SoilProp")
-        self.label_SoilProp.setGeometry(QRect(610, 30, 101, 16))
+        self.label_SoilProp.setGeometry(QRect(610, 30, 511, 16))
         font = QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -77,7 +77,7 @@ class Ui_MainWindow(object):
         self.tableWidget_Profile.verticalHeader().setDefaultSectionSize(30)
         self.label_profileProp = QLabel(self.centralwidget)
         self.label_profileProp.setObjectName(u"label_profileProp")
-        self.label_profileProp.setGeometry(QRect(600, 300, 101, 16))
+        self.label_profileProp.setGeometry(QRect(600, 300, 541, 16))
         self.label_profileProp.setFont(font)
         self.pushButton_removeProfile = QPushButton(self.centralwidget)
         self.pushButton_removeProfile.setObjectName(u"pushButton_removeProfile")
@@ -215,6 +215,7 @@ class Ui_MainWindow(object):
         self.comboBox_analysisType = QComboBox(self.centralwidget)
         self.comboBox_analysisType.addItem("")
         self.comboBox_analysisType.addItem("")
+        self.comboBox_analysisType.addItem("")
         self.comboBox_analysisType.setObjectName(u"comboBox_analysisType")
         self.comboBox_analysisType.setGeometry(QRect(1180, 10, 141, 22))
         self.label_15 = QLabel(self.centralwidget)
@@ -349,7 +350,11 @@ class Ui_MainWindow(object):
         self.label_23.setObjectName(u"label_23")
         self.label_23.setGeometry(QRect(1160, 360, 91, 20))
         self.label_23.setFont(font1)
+        self.pushButton_loadBatch = QPushButton(self.centralwidget)
+        self.pushButton_loadBatch.setObjectName(u"pushButton_loadBatch")
+        self.pushButton_loadBatch.setGeometry(QRect(1180, 490, 93, 28))
         MainWindow.setCentralWidget(self.centralwidget)
+        self.pushButton_loadBatch.raise_()
         self.tableWidget_Permutations.raise_()
         self.tableWidget_Profile.raise_()
         self.groupBox_TH.raise_()
@@ -479,6 +484,7 @@ class Ui_MainWindow(object):
         self.label_13.setText(QCoreApplication.translate("MainWindow", u"Error tolerance [%]", None))
         self.comboBox_analysisType.setItemText(0, QCoreApplication.translate("MainWindow", u"Regular analysis", None))
         self.comboBox_analysisType.setItemText(1, QCoreApplication.translate("MainWindow", u"Permutations", None))
+        self.comboBox_analysisType.setItemText(2, QCoreApplication.translate("MainWindow", u"Batch analysis", None))
 
         self.label_15.setText(QCoreApplication.translate("MainWindow", u"Brick size", None))
         self.lineEdit_brickSize.setText(QCoreApplication.translate("MainWindow", u"3", None))
@@ -525,6 +531,7 @@ class Ui_MainWindow(object):
         self.lineEdit_bedDepth.setText(QCoreApplication.translate("MainWindow", u"30", None))
         self.label_22.setText(QCoreApplication.translate("MainWindow", u"m", None))
         self.label_23.setText(QCoreApplication.translate("MainWindow", u"Bedrock depth", None))
+        self.pushButton_loadBatch.setText(QCoreApplication.translate("MainWindow", u"Load batch file", None))
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"?", None))
     # retranslateUi
 

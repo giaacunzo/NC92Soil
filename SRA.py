@@ -6,6 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
+from SRAClasses import BatchAnalyzer
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -19,7 +20,7 @@ from pygame import mixer, error as pygameexception
 def aboutMessage():
     mixer.init()
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.1 beta\n"
+    Messaggio.setText("NC92-Soil\nversion 0.5 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil")
     try:
@@ -42,6 +43,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.curveDB = dict()
         self.userModified = True
         self.inputMotion = dict()
+        self.batchObject = None
 
         self.setupUi(self)
         self.assignWidgets()
@@ -85,6 +87,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.checkBox_outBrief.stateChanged.connect(self.updateOutputInfo)
         self.checkBox_outRS.stateChanged.connect(self.updateOutputInfo)
         self.actionAbout.triggered.connect(aboutMessage)
+        self.pushButton_loadBatch.clicked.connect(self.loadBatch)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -96,8 +99,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             if not self.sender().isChecked():
                 self.checkBox_outBrief.setChecked(False)
 
-    def addRow(self):
-        senderName = self.sender().objectName()
+    def addRow(self, sender=None):
+        if sender is None:
+            senderName = self.sender().objectName()
+        else:
+            senderName = sender
 
         if senderName == 'pushButton_addProfile' and self.comboBox_analysisType.currentText() == 'Permutations':
             tableName = 'tableWidget_Permutations'
@@ -216,6 +222,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_Units.setCurrentText(currentData[4])
 
     def changeAnalysis(self):
+        buttonList = ['pushButton_addProfile', 'pushButton_removeProfile', 'pushButton_addSoil',
+                      'pushButton_removeSoil']
         currentData = self.comboBox_analysisType.currentText()
         if currentData == 'Permutations':
             self.lineEdit_brickSize.setEnabled(True)
@@ -223,14 +231,58 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.lineEdit_bedDepth.setEnabled(True)
             self.tableWidget_Permutations.show()
             self.tableWidget_Profile.hide()
+            self.label_SoilProp.setText('Soil properties')
             self.label_profileProp.setText('Soil percentage')
-        else:
+            self.tableWidget_Soil.setEnabled(True)
+            self.tableWidget_Permutations.setEnabled(True)
+            self.pushButton_drawProfile.show()
+            self.pushButton_loadBatch.hide()
+
+            for element in buttonList:
+                getattr(self, element).setEnabled(True)
+
+            # Switching signal for run button to manual analysis
+            self.pushButton_run.clicked.disconnect()
+            self.pushButton_run.clicked.connect(self.runAnalysis)
+        elif currentData == 'Regular analysis':
             self.lineEdit_brickSize.setEnabled(False)
             self.plainTextEdit_overview.setEnabled(False)
             self.lineEdit_bedDepth.setEnabled(False)
             self.tableWidget_Permutations.hide()
             self.tableWidget_Profile.show()
+            self.label_SoilProp.setText('Soil properties')
             self.label_profileProp.setText('Profile')
+            self.tableWidget_Soil.setEnabled(True)
+            self.tableWidget_Profile.setEnabled(True)
+            self.pushButton_drawProfile.show()
+            self.pushButton_loadBatch.hide()
+
+            for element in buttonList:
+                getattr(self, element).setEnabled(True)
+
+            # Switching signal for run button to manual analysis
+            self.pushButton_run.clicked.disconnect()
+            self.pushButton_run.clicked.connect(self.runAnalysis)
+
+        elif currentData == 'Batch analysis':
+            self.lineEdit_brickSize.setEnabled(False)
+            self.plainTextEdit_overview.setEnabled(False)
+            self.lineEdit_bedDepth.setEnabled(False)
+            self.tableWidget_Permutations.show()
+            self.tableWidget_Profile.hide()
+            self.label_profileProp.setText('Soil percentage (from input file)')
+            self.label_SoilProp.setText('Soil properties (from input file)')
+            self.tableWidget_Soil.setEnabled(False)
+            self.tableWidget_Permutations.setEnabled(False)
+            self.pushButton_drawProfile.hide()
+            self.pushButton_loadBatch.show()
+
+            for element in buttonList:
+                getattr(self, element).setEnabled(False)
+
+            # Switching signal for run button to batch analysis
+            self.pushButton_run.clicked.disconnect()
+            self.pushButton_run.clicked.connect(self.runBatch)
 
     def changeInputPanel(self):
         if self.comboBox_THorRVT.currentText() == 'RVT':
@@ -306,7 +358,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_spectraList.setCurrentIndex(0)
         self.comboBox_spectraList.setEnabled(True)
 
-    def runAnalysis(self):
+    def runAnalysis(self, batchAnalysis=False, batchOptions=None):
         if self.checkBox_autoDiscretize.isChecked():
             currentMaxFreq = float(self.lineEdit_maxFreq.text())
             currentWaveLength = float(self.lineEdit_waveLength.text())
@@ -332,11 +384,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                   self.lineEdit_bedDamping.text()], 'OutputList': outputList,
                       'OutputParam': outputParam, 'LECalcOptions': LECalcOptions}
 
-        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
-        if outputFolder == '':
-            return None
+        if batchAnalysis:
+            outputFolder = batchOptions['outputFolder']
+        else:
+            outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+            if outputFolder == '':
+                return None
 
-        if analysisType == 'Permutations':
+        if analysisType == 'Permutations' or batchAnalysis:
             bedrockDepth = float(self.lineEdit_bedDepth.text())
             brickSize = float(self.lineEdit_brickSize.text())
             brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
@@ -356,11 +411,12 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             profilePermutations = [profileList]
 
-        currentData = self.inputMotion
-        # analysisCounter = 1
-        totalMotions = len(currentData.keys())
+        if batchAnalysis:
+            currentData = {key: value for key, value in self.inputMotion.items() if key in batchOptions['inputSet']}
+        else:
+            currentData = self.inputMotion
+        # totalMotions = len(currentData.keys())
         totalProfiles = len(profilePermutations)
-        # totalAnalysis = totalProfiles*totalMotions
 
         risultatiDict = dict()
         profiliDF = pd.DataFrame()
@@ -383,7 +439,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             profileVs = [strato[-1] for strato in profileList]
             profileSoilDesc = ["{} - {} m/s - {} m".format(name, vsValue, thickness)
                                for name, vsValue, thickness in zip(profileSoilNames, profileVs, profileSoilThick)]
-            profileCode = "P{}".format(numberProfile + 1)
+            if batchAnalysis:
+                profileCode = "{}/P{}".format(batchOptions['currentPrefix'], numberProfile + 1)
+            else:
+                profileCode = "P{}".format(numberProfile + 1)
             profiliDF[profileCode] = profileSoilDesc
 
             for fileName in currentData.keys():
@@ -432,7 +491,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             App.processEvents()
 
         # Scrittura dei risultati
-
         vociOutput = risultatiDict.keys()
 
         for voce in vociOutput:
@@ -455,7 +513,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # Writing profile table
         profiliExcelFile = os.path.join(outputFolder, 'Profiles.xlsx')
         profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
-        QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
+
+        if not batchAnalysis:
+            QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, permutationList, outputList):
         currentAnalysis = self.comboBox_analysisType.currentText()
@@ -514,6 +574,73 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(QMessageBox(), "Check output", msg)
             return None
         return 0
+
+    def loadBatch(self):
+        batchFile = QFileDialog.getOpenFileName(self, caption="Choose the input batch file",
+                                                filter='Excel Files (*.xlsx)')
+        if len(batchFile) == 0:
+            return None
+        else:
+            self.batchObject = BatchAnalyzer(batchFile[0])
+
+        QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
+
+    def runBatch(self):
+        if self.batchObject is None:
+            msg = "Please import a valid batch input file before running the analysis"
+            QMessageBox.warning(QMessageBox(), "Check batch input", msg)
+            return None
+
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        if outputFolder == '':
+            return None
+
+        batchObject = self.batchObject
+        numberClusters = batchObject.profileNumber
+        numberVs = batchObject.vsNumber
+
+        for clusterIndex in range(numberClusters):
+            currentProfile, currentDepth, currentBrick = batchObject.getProfileInfo(clusterIndex)
+            currentMotions = batchObject.getInputNames(clusterIndex)
+            self.lineEdit_brickSize.setText(str(currentBrick))
+            self.lineEdit_brickSize.setText(str(currentBrick))
+            for vsIndex in range(numberVs):
+                currentSoil = batchObject.getSoilTable(vsIndex)
+                self.list2table(currentSoil, currentProfile)
+                currentName = "{}-VS{}".format(batchObject.getProfileName(clusterIndex), vsIndex + 1)
+                currentFolder = os.path.join(outputFolder, currentName)
+                try:
+                    os.mkdir(currentFolder)
+                except FileExistsError:
+                    pass
+
+                # Running analysis
+                batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
+                                'currentPrefix': currentName}
+                self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+
+        QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
+
+    def list2table(self, soilTable, permutationTable):
+        # Updating soil table
+        self.tableWidget_Soil.clearContents()
+        self.tableWidget_Soil.setRowCount(0)
+        for rowIndex, row in enumerate(soilTable):
+            self.addRow(sender='Soil')
+            for elemIndex, element in enumerate(row):
+                if elemIndex == 5:
+                    self.tableWidget_Soil.cellWidget(rowIndex, elemIndex).setCurrentText(element)
+                else:
+                    currentItem = QTableWidgetItem(str(element)) if element is not None else element
+                    self.tableWidget_Soil.setItem(rowIndex, elemIndex, currentItem)
+
+        # Updating permutations table
+        self.tableWidget_Permutations.clearContents()
+        self.tableWidget_Permutations.setRowCount(0)
+        for rowIndex, row in enumerate(permutationTable):
+            self.addRow(sender='Permutations')
+            for elemIndex, element in enumerate(row):
+                self.tableWidget_Permutations.setItem(rowIndex, elemIndex, QTableWidgetItem(str(element)))
 
 
 if __name__ == "__main__":
