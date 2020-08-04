@@ -247,7 +247,7 @@ def makeBricks(profileTable, brickSize, bedrockDepth):
         currentPercentage = float(profileTable.item(riga, 1).text())
         currentNameCell = profileTable.item(riga, 0)
         currentName = profileTable.item(riga, 0).text() if currentNameCell is not None else 'N/D'
-        currentThickness = bedrockDepth * currentPercentage/100
+        currentThickness = round(bedrockDepth * currentPercentage/100, 2)
         numberBricks = int(np.floor(currentThickness/brickSize))
 
         for strato in range(numberBricks):
@@ -438,6 +438,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
 
 def getBriefValues(computationObject, depth):
     """
+    SUPERSEEDED BY NEW CLASSES IN SRAClasses.py
     This function computes the fourier antitransform of the wave at a given depth and extract the desired parameters
 
     :param computationObject:
@@ -454,6 +455,4 @@ def getBriefValues(computationObject, depth):
     # Computing fourier amplitude of velocities
     currentWaveVelTF = np.multiply(currentWaveAccTF, computationObject.motion.angular_freqs ** -1)
     maxVel = computationObject.motion.calc_peak(currentWaveVelTF)
-
-    # CONTINUARE DA QUI
 

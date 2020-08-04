@@ -105,6 +105,9 @@ class BriefReportOutput(pysra.output.Output):
 
 
 class BatchAnalyzer:
+    """
+    Class for handling batch analysis
+    """
     def __init__(self, filename):
         currentSoils = pd.read_excel(filename, sheet_name='Soils')
         currentClusters = pd.read_excel(filename, sheet_name='Clusters')
@@ -122,7 +125,7 @@ class BatchAnalyzer:
             rowList = list(row)
             rowList[4] = float(rowList[4].split(';')[vsIndex].strip())
             rowList[2] = rowList[2] if not np.isnan(rowList[2]) else None  # From [m]
-            rowList[3] = rowList[3] if not np.isnan(rowList[3]) else None # To [m]
+            rowList[3] = rowList[3] if not np.isnan(rowList[3]) else None  # To [m]
             soilTable.append(rowList)
         return soilTable
 

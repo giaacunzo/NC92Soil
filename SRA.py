@@ -603,7 +603,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentProfile, currentDepth, currentBrick = batchObject.getProfileInfo(clusterIndex)
             currentMotions = batchObject.getInputNames(clusterIndex)
             self.lineEdit_brickSize.setText(str(currentBrick))
-            self.lineEdit_brickSize.setText(str(currentBrick))
+            self.lineEdit_bedDepth.setText(str(currentDepth))
             for vsIndex in range(numberVs):
                 currentSoil = batchObject.getSoilTable(vsIndex)
                 self.list2table(currentSoil, currentProfile)
