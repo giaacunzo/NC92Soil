@@ -268,7 +268,7 @@ def addDepths(profileList):
     return newProfile
 
 
-def addVariableProperties(soilList, profileList):
+def addVariableProperties(soilList, profileList, vsList=None):
     # Expanding soil list
     newSoilList = list()
     for indice, layer in enumerate(profileList):
@@ -276,13 +276,17 @@ def addVariableProperties(soilList, profileList):
         currentSoilName = layer[2]
         currentSoilDef = [row for row in soilList
                           if (row[0] == currentSoilName and row[2] <= currentCentroid < row[3])][0]
+        A = 5
         newSoilName = '{}[{}]'.format(currentSoilDef[0], indice)
         newSoilRow = [newSoilName, currentSoilDef[1], currentSoilDef[-1]]
         newSoilList.append(newSoilRow)
 
         # Adding velocity to current profile table and changing soil name
         layer[-1] = newSoilName
-        layer.append(currentSoilDef[4])
+        if vsList is not None and vsList[indice] != -1:  # Vs is specified from input file
+            layer.append(vsList[indice])
+        else:
+            layer.append(currentSoilDef[4])
 
     return newSoilList, profileList
 

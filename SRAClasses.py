@@ -111,13 +111,16 @@ class BatchAnalyzer:
     def __init__(self, filename):
         currentSoils = pd.read_excel(filename, sheet_name='Soils')
         currentClusters = pd.read_excel(filename, sheet_name='Clusters')
+        currentProfiles = pd.read_excel(filename, sheet_name='Profiles')
 
         self._rawSoils = currentSoils
         self._rawClusters = currentClusters
+        self._rawProfiles = currentProfiles
         self.vsNumber = currentSoils['Vs\n[m/s]'][0].count(';') + 1
-        self.profileNumber = len(currentClusters)
+        self.clusterNumber = len(currentClusters)
+        self.profileNumber = currentProfiles.shape[1]
 
-        self.getInputNames(0)
+        self.getProfileInfo(0)
 
     def getSoilTable(self, vsIndex):
         soilTable = list()
@@ -129,21 +132,43 @@ class BatchAnalyzer:
             soilTable.append(rowList)
         return soilTable
 
-    def getProfileInfo(self, profileIndex):
-        profileTable = list()
-        currentProfile = self._rawClusters.iloc[profileIndex, :]
-        bedrockDepth = currentProfile['Bedrock depth\n[m]']
-        brickSize = currentProfile['Brick thickness\n[m]']
-        soilNames = currentProfile.index[5:]
+    def getClusterInfo(self, clusterIndex):
+        permutationTable = list()
+        currentCluster = self._rawClusters.iloc[clusterIndex, :]
+        bedrockDepth = currentCluster['Bedrock depth\n[m]']
+        brickSize = currentCluster['Brick thickness\n[m]']
+        soilNames = currentCluster.index[5:]
 
         for soil in soilNames:
-            profileTable.append([soil, currentProfile[soil]])
+            permutationTable.append([soil, currentCluster[soil]])
 
-        return profileTable, bedrockDepth, brickSize
+        return permutationTable, bedrockDepth, brickSize
 
-    def getInputNames(self, profileIndex):
-        return [inputName.strip() for inputName in self._rawClusters.iloc[profileIndex][4].split(';')]
+    def getInputNames(self, elementIndex, element_type='clusters'):
+        if element_type == 'clusters':
+            return [inputName.strip() for inputName in self._rawClusters.iloc[elementIndex][4].split(';')]
+        else:
+            return [inputName.strip() for inputName in self._rawProfiles.iloc[0, elementIndex].split(';')]
 
-    def getProfileName(self, profileIndex):
-        currentProfile = self._rawClusters.iloc[profileIndex, :2]
-        return "{}-{}".format(*currentProfile)
+    def getElementName(self, elementIndex, element_type='clusters'):
+        if element_type == 'clusters':
+            currentCluster = self._rawClusters.iloc[elementIndex, :2]
+            return "{}-{}".format(*currentCluster)
+        else:
+            return self._rawProfiles.iloc[:, elementIndex].name
+
+    def getProfileInfo(self, profileIndex):
+        profileTable = list()
+        VsList = list()
+        currentProfile = self._rawProfiles.iloc[:, profileIndex]
+
+        for layer in currentProfile[1:]:
+            if layer.count(';') == 2:  # Vs has been specified
+                layerName, layerThickness, layerVs = layer.split(';')
+            else:
+                layerName, layerThickness = layer.split(';')
+                layerVs = -1
+            profileTable.append([float(layerThickness), layerName])
+            VsList.append(float(layerVs))
+
+        return profileTable, VsList

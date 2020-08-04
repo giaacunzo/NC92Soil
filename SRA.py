@@ -99,8 +99,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             if not self.sender().isChecked():
                 self.checkBox_outBrief.setChecked(False)
 
-    def addRow(self, sender=None):
-        if sender is None:
+    def addRow(self, sender):
+        if not sender:
             senderName = self.sender().objectName()
         else:
             senderName = sender
@@ -169,12 +169,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
     def profileChanged(self):
         if not self.userModified:
             return None
-        rowNumber = self.sender().rowCount()
+        rowNumber = self.tableWidget_Profile.rowCount()
 
         self.userModified = False
         for riga in range(1, rowNumber):
-            currentDepth = float(self.sender().item(riga - 1, 0).text()) + float(self.sender().item(riga - 1, 1).text())
-            self.sender().setItem(riga, 0, QTableWidgetItem(str(currentDepth)))
+            currentDepth = float(self.tableWidget_Profile.item(riga - 1, 0).text()) + \
+                           float(self.tableWidget_Profile.item(riga - 1, 1).text())
+            self.tableWidget_Profile.setItem(riga, 0, QTableWidgetItem(str(currentDepth)))
         self.userModified = True
 
     def viewTH(self):
@@ -391,25 +392,30 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             if outputFolder == '':
                 return None
 
-        if analysisType == 'Permutations' or batchAnalysis:
-            bedrockDepth = float(self.lineEdit_bedDepth.text())
-            brickSize = float(self.lineEdit_brickSize.text())
-            brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
-            numberPermutations = SRALib.calcPermutations(brickProfile)[0]
+        if batchAnalysis:
+            profilePermutations = batchOptions['profilePermutations']
+            vsList = batchOptions['vsList']
+        else:  # Analysis with input from GUI
+            vsList = None
+            if analysisType == 'Permutations':
+                bedrockDepth = float(self.lineEdit_bedDepth.text())
+                brickSize = float(self.lineEdit_brickSize.text())
+                brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
+                numberPermutations = SRALib.calcPermutations(brickProfile)[0]
 
-            waitBar = QProgressDialog("Generating {} permutations..".format(int(numberPermutations)), "Cancel", 0, 1)
-            waitBar.setWindowTitle('NC92-Soil permutator')
-            waitBar.setValue(0)
-            waitBar.setMinimumDuration(0)
-            waitBar.show()
-            App.processEvents()
+                waitBar = QProgressDialog("Generating {} permutations..".format(int(numberPermutations)), "Cancel", 0, 1)
+                waitBar.setWindowTitle('NC92-Soil permutator')
+                waitBar.setValue(0)
+                waitBar.setMinimumDuration(0)
+                waitBar.show()
+                App.processEvents()
 
-            profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
+                profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
 
-            waitBar.setValue(1)
-            App.processEvents()
-        else:
-            profilePermutations = [profileList]
+                waitBar.setValue(1)
+                App.processEvents()
+            else:  # Regular analysis
+                profilePermutations = [profileList]
 
         if batchAnalysis:
             currentData = {key: value for key, value in self.inputMotion.items() if key in batchOptions['inputSet']}
@@ -433,7 +439,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
 
             profileList = SRALib.addDepths(profiloCorrente)  # Add depths to current profile
-            currentSoilList, profileList = SRALib.addVariableProperties(soilList, profileList)
+            currentSoilList, profileList = SRALib.addVariableProperties(soilList, profileList, vsList)
             profileSoilNames = [strato[2] for strato in profileList]
             profileSoilThick = [str(strato[1]) for strato in profileList]
             profileVs = [strato[-1] for strato in profileList]
@@ -596,32 +602,95 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             return None
 
         batchObject = self.batchObject
-        numberClusters = batchObject.profileNumber
+        numberClusters = batchObject.clusterNumber
+        numberProfiles = batchObject.profileNumber
         numberVs = batchObject.vsNumber
 
-        for clusterIndex in range(numberClusters):
-            currentProfile, currentDepth, currentBrick = batchObject.getProfileInfo(clusterIndex)
-            currentMotions = batchObject.getInputNames(clusterIndex)
-            self.lineEdit_brickSize.setText(str(currentBrick))
-            self.lineEdit_bedDepth.setText(str(currentDepth))
-            for vsIndex in range(numberVs):
-                currentSoil = batchObject.getSoilTable(vsIndex)
-                self.list2table(currentSoil, currentProfile)
-                currentName = "{}-VS{}".format(batchObject.getProfileName(clusterIndex), vsIndex + 1)
-                currentFolder = os.path.join(outputFolder, currentName)
-                try:
-                    os.mkdir(currentFolder)
-                except FileExistsError:
-                    pass
+        # Batch analysis with clusters
+        if numberClusters > 0:
+            self.tableWidget_Permutations.show()
+            self.tableWidget_Profile.hide()
+            clustersOutputFolder = os.path.join(outputFolder, 'Clusters')
+            try:
+                os.mkdir(clustersOutputFolder)
+            except FileExistsError:
+                pass
 
-                # Running analysis
-                batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
-                                'currentPrefix': currentName}
-                self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+            for clusterIndex in range(numberClusters):
+                currentCluster, currentDepth, currentBrick = batchObject.getClusterInfo(clusterIndex)
+                currentMotions = batchObject.getInputNames(clusterIndex, element_type='clusters')
+                self.lineEdit_brickSize.setText(str(currentBrick))
+                self.lineEdit_bedDepth.setText(str(currentDepth))
+
+                # Generating permutations for current cluster
+                bedrockDepth = float(self.lineEdit_bedDepth.text())
+                brickSize = float(self.lineEdit_brickSize.text())
+                brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
+                numberPermutations = SRALib.calcPermutations(brickProfile)[0]
+
+                waitBar = QProgressDialog("Generating {} permutations..".format(int(numberPermutations)), "Cancel", 0,
+                                          1)
+                waitBar.setWindowTitle('NC92-Soil permutator')
+                waitBar.setValue(0)
+                waitBar.setMinimumDuration(0)
+                waitBar.show()
+                App.processEvents()
+
+                profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
+
+                waitBar.setValue(1)
+                App.processEvents()
+
+                for vsIndex in range(numberVs):
+                    currentSoil = batchObject.getSoilTable(vsIndex)
+                    self.list2table(currentSoil, permutationTable=currentCluster)
+                    currentName = "{}-VS{}".format(batchObject.getElementName(clusterIndex, 'clusters'), vsIndex + 1)
+                    currentFolder = os.path.join(clustersOutputFolder, currentName)
+                    try:
+                        os.mkdir(currentFolder)
+                    except FileExistsError:
+                        pass
+
+                    # Running analysis
+                    batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
+                                    'currentPrefix': currentName, 'profilePermutations': profilePermutations,
+                                    'vsList': None}
+                    self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+
+        # Batch analysis with profiles
+        if numberProfiles > 0:
+            self.tableWidget_Permutations.hide()
+            self.tableWidget_Profile.show()
+            profilesOutputFolder = os.path.join(outputFolder, 'Profiles')
+            try:
+                os.mkdir(profilesOutputFolder)
+            except FileExistsError:
+                pass
+
+            for profileIndex in range(numberProfiles):
+                currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
+                currentMotions = batchObject.getInputNames(profileIndex, element_type='profiles')
+                for vsIndex in range(numberVs):
+                    currentSoil = batchObject.getSoilTable(vsIndex)
+                    currentName = "{}-VS{}".format(batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
+                    currentFolder = os.path.join(profilesOutputFolder, currentName)
+                    try:
+                        os.mkdir(currentFolder)
+                    except FileExistsError:
+                        pass
+
+                    self.list2table(currentSoil, profileTable=currentProfile)
+                    self.userModified = True
+                    self.profileChanged()
+                    # Running analysis
+                    batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
+                                    'currentPrefix': currentName, 'profilePermutations': [currentProfile],
+                                    'vsList': currentVsList}
+                    self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
 
-    def list2table(self, soilTable, permutationTable):
+    def list2table(self, soilTable, permutationTable=None, profileTable=None):
         # Updating soil table
         self.tableWidget_Soil.clearContents()
         self.tableWidget_Soil.setRowCount(0)
@@ -634,13 +703,26 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     currentItem = QTableWidgetItem(str(element)) if element is not None else element
                     self.tableWidget_Soil.setItem(rowIndex, elemIndex, currentItem)
 
-        # Updating permutations table
-        self.tableWidget_Permutations.clearContents()
-        self.tableWidget_Permutations.setRowCount(0)
-        for rowIndex, row in enumerate(permutationTable):
-            self.addRow(sender='Permutations')
-            for elemIndex, element in enumerate(row):
-                self.tableWidget_Permutations.setItem(rowIndex, elemIndex, QTableWidgetItem(str(element)))
+        if permutationTable is not None:
+            # Updating permutations table
+            self.tableWidget_Permutations.clearContents()
+            self.tableWidget_Permutations.setRowCount(0)
+            for rowIndex, row in enumerate(permutationTable):
+                self.addRow(sender='Permutations')
+                for elemIndex, element in enumerate(row):
+                    self.tableWidget_Permutations.setItem(rowIndex, elemIndex, QTableWidgetItem(str(element)))
+
+        if profileTable is not None:
+            self.tableWidget_Profile.clearContents()
+            self.tableWidget_Profile.setRowCount(0)
+            for rowIndex, row in enumerate(profileTable):
+                self.addRow(sender='Profile')
+                self.userModified = False
+                if rowIndex == 0:
+                    self.tableWidget_Profile.setItem(rowIndex, 0, QTableWidgetItem('0.0'))
+
+                for elemIndex, element in enumerate(row):
+                    self.tableWidget_Profile.setItem(rowIndex, elemIndex + 1, QTableWidgetItem(str(element)))
 
 
 if __name__ == "__main__":
