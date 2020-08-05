@@ -20,7 +20,7 @@ from pygame import mixer, error as pygameexception
 def aboutMessage():
     mixer.init()
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.5 beta\n"
+    Messaggio.setText("NC92-Soil\nversion 0.6 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil")
     try:
@@ -446,7 +446,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             profileSoilDesc = ["{} - {} m/s - {} m".format(name, vsValue, thickness)
                                for name, vsValue, thickness in zip(profileSoilNames, profileVs, profileSoilThick)]
             if batchAnalysis:
-                profileCode = "{}/P{}".format(batchOptions['currentPrefix'], numberProfile + 1)
+                if batchOptions['batchType'] == 'permutations':
+                    profileCode = "{}/P{}".format(batchOptions['currentPrefix'], numberProfile + 1)
+                else:
+                    profileCode = "{}".format(batchOptions['currentPrefix'])
             else:
                 profileCode = "P{}".format(numberProfile + 1)
             profiliDF[profileCode] = profileSoilDesc
@@ -604,7 +607,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         batchObject = self.batchObject
         numberClusters = batchObject.clusterNumber
         numberProfiles = batchObject.profileNumber
-        numberVs = batchObject.vsNumber
 
         # Batch analysis with clusters
         if numberClusters > 0:
@@ -641,7 +643,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 waitBar.setValue(1)
                 App.processEvents()
 
-                for vsIndex in range(numberVs):
+                for vsIndex in range(batchObject.vsNumber):
                     currentSoil = batchObject.getSoilTable(vsIndex)
                     self.list2table(currentSoil, permutationTable=currentCluster)
                     currentName = "{}-VS{}".format(batchObject.getElementName(clusterIndex, 'clusters'), vsIndex + 1)
@@ -652,9 +654,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                         pass
 
                     # Running analysis
-                    batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
-                                    'currentPrefix': currentName, 'profilePermutations': profilePermutations,
-                                    'vsList': None}
+                    batchOptions = {'batchType': 'permutations', 'inputSet': currentMotions,
+                                    'outputFolder': currentFolder, 'currentPrefix': currentName,
+                                    'profilePermutations': profilePermutations, 'vsList': None}
                     self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
         # Batch analysis with profiles
@@ -670,6 +672,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             for profileIndex in range(numberProfiles):
                 currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
                 currentMotions = batchObject.getInputNames(profileIndex, element_type='profiles')
+
+                # If VS is specified only one analysis is performed
+                if all([element == -1 for element in currentVsList]):
+                    numberVs = batchObject.vsNumber
+                else:
+                    numberVs = 1
+
                 for vsIndex in range(numberVs):
                     currentSoil = batchObject.getSoilTable(vsIndex)
                     currentName = "{}-VS{}".format(batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
@@ -683,7 +692,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     self.userModified = True
                     self.profileChanged()
                     # Running analysis
-                    batchOptions = {'inputSet': currentMotions, 'outputFolder': currentFolder,
+                    batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions, 'outputFolder': currentFolder,
                                     'currentPrefix': currentName, 'profilePermutations': [currentProfile],
                                     'vsList': currentVsList}
                     self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
