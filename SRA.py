@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -20,7 +20,7 @@ from pygame import mixer, error as pygameexception
 def aboutMessage():
     mixer.init()
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.6 beta\n"
+    Messaggio.setText("NC92-Soil\nversion 0.7 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil")
     try:
@@ -88,6 +88,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.checkBox_outRS.stateChanged.connect(self.updateOutputInfo)
         self.actionAbout.triggered.connect(aboutMessage)
         self.pushButton_loadBatch.clicked.connect(self.loadBatch)
+        self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -236,6 +237,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.label_profileProp.setText('Soil percentage')
             self.tableWidget_Soil.setEnabled(True)
             self.tableWidget_Permutations.setEnabled(True)
+            self.tableWidget_Profile.setEnabled(True)
             self.pushButton_drawProfile.show()
             self.pushButton_loadBatch.hide()
 
@@ -255,6 +257,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.label_profileProp.setText('Profile')
             self.tableWidget_Soil.setEnabled(True)
             self.tableWidget_Profile.setEnabled(True)
+            self.tableWidget_Permutations.setEnabled(True)
             self.pushButton_drawProfile.show()
             self.pushButton_loadBatch.hide()
 
@@ -275,6 +278,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.label_SoilProp.setText('Soil properties (from input file)')
             self.tableWidget_Soil.setEnabled(False)
             self.tableWidget_Permutations.setEnabled(False)
+            self.tableWidget_Profile.setEnabled(False)
             self.pushButton_drawProfile.hide()
             self.pushButton_loadBatch.show()
 
@@ -594,6 +598,31 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
 
+    def loadStochastic(self):
+        """
+        Load the stochastic input Excel file to generate the profiles for batch analysis
+        :return:
+        """
+        stochasticFile = QFileDialog.getOpenFileName(self, caption="Choose the input stochastic file",
+                                                     filter='Excel Files (*.xlsx)')
+        if len(stochasticFile) == 0:
+            return None
+        else:
+            stochasticObject = StochasticAnalyzer(stochasticFile[0])
+
+        for iteration in range(stochasticObject.numberIterations):
+            # Generation of the random profile
+            stochasticObject.generateRndProfile()
+
+        exportFilename = QFileDialog.getSaveFileName(self, caption="Choose the input stochastic file",
+                                                     filter='Excel Files (*.xlsx)')
+        if len(exportFilename) == 0:
+            return None
+        else:
+            stochasticObject.exportExcel(exportFilename[0])
+
+        QMessageBox.information(QMessageBox(), 'OK', 'Batch file for stochastic analysis has been correctly exported')
+
     def runBatch(self):
         if self.batchObject is None:
             msg = "Please import a valid batch input file before running the analysis"
@@ -625,6 +654,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 self.lineEdit_bedDepth.setText(str(currentDepth))
 
                 # Generating permutations for current cluster
+                self.list2table(permutationTable=currentCluster)
                 bedrockDepth = float(self.lineEdit_bedDepth.text())
                 brickSize = float(self.lineEdit_brickSize.text())
                 brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
@@ -645,7 +675,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                 for vsIndex in range(batchObject.vsNumber):
                     currentSoil = batchObject.getSoilTable(vsIndex)
-                    self.list2table(currentSoil, permutationTable=currentCluster)
+                    self.list2table(soilTable=currentSoil)
                     currentName = "{}-VS{}".format(batchObject.getElementName(clusterIndex, 'clusters'), vsIndex + 1)
                     currentFolder = os.path.join(clustersOutputFolder, currentName)
                     try:
@@ -663,6 +693,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if numberProfiles > 0:
             self.tableWidget_Permutations.hide()
             self.tableWidget_Profile.show()
+            self.label_profileProp.setText('Profile (from input file)')
+
             profilesOutputFolder = os.path.join(outputFolder, 'Profiles')
             try:
                 os.mkdir(profilesOutputFolder)
@@ -671,7 +703,12 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
             for profileIndex in range(numberProfiles):
                 currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
-                currentMotions = batchObject.getInputNames(profileIndex, element_type='profiles')
+                currentMotions = [inputName
+                                  for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
+                                  if inputName.strip() != ""]
+
+                if len(currentMotions) == 0:  # No input specified, all the imported input will be used
+                    currentMotions = list(self.inputMotion.keys())
 
                 # If VS is specified only one analysis is performed
                 if all([element == -1 for element in currentVsList]):
@@ -699,18 +736,19 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
 
-    def list2table(self, soilTable, permutationTable=None, profileTable=None):
-        # Updating soil table
-        self.tableWidget_Soil.clearContents()
-        self.tableWidget_Soil.setRowCount(0)
-        for rowIndex, row in enumerate(soilTable):
-            self.addRow(sender='Soil')
-            for elemIndex, element in enumerate(row):
-                if elemIndex == 5:
-                    self.tableWidget_Soil.cellWidget(rowIndex, elemIndex).setCurrentText(element)
-                else:
-                    currentItem = QTableWidgetItem(str(element)) if element is not None else element
-                    self.tableWidget_Soil.setItem(rowIndex, elemIndex, currentItem)
+    def list2table(self, soilTable=None, permutationTable=None, profileTable=None):
+        if soilTable is not None:
+            # Updating soil table
+            self.tableWidget_Soil.clearContents()
+            self.tableWidget_Soil.setRowCount(0)
+            for rowIndex, row in enumerate(soilTable):
+                self.addRow(sender='Soil')
+                for elemIndex, element in enumerate(row):
+                    if elemIndex == 5:
+                        self.tableWidget_Soil.cellWidget(rowIndex, elemIndex).setCurrentText(element)
+                    else:
+                        currentItem = QTableWidgetItem(str(element)) if element is not None else element
+                        self.tableWidget_Soil.setItem(rowIndex, elemIndex, currentItem)
 
         if permutationTable is not None:
             # Updating permutations table

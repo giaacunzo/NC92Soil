@@ -22,9 +22,11 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1323, 910)
+        MainWindow.resize(1319, 910)
         self.actionAbout = QAction(MainWindow)
         self.actionAbout.setObjectName(u"actionAbout")
+        self.actionGenerateStochastic = QAction(MainWindow)
+        self.actionGenerateStochastic.setObjectName(u"actionGenerateStochastic")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.graphWidget = MplWidget(self.centralwidget)
@@ -354,9 +356,9 @@ class Ui_MainWindow(object):
         self.pushButton_loadBatch.setObjectName(u"pushButton_loadBatch")
         self.pushButton_loadBatch.setGeometry(QRect(1180, 490, 93, 28))
         MainWindow.setCentralWidget(self.centralwidget)
-        self.pushButton_loadBatch.raise_()
         self.tableWidget_Permutations.raise_()
         self.tableWidget_Profile.raise_()
+        self.pushButton_loadBatch.raise_()
         self.groupBox_TH.raise_()
         self.groupBox_RVT.raise_()
         self.graphWidget.raise_()
@@ -400,13 +402,17 @@ class Ui_MainWindow(object):
         self.label_23.raise_()
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 1323, 26))
+        self.menubar.setGeometry(QRect(0, 0, 1319, 26))
         self.menu = QMenu(self.menubar)
         self.menu.setObjectName(u"menu")
+        self.menuTools = QMenu(self.menubar)
+        self.menuTools.setObjectName(u"menuTools")
         MainWindow.setMenuBar(self.menubar)
 
         self.menubar.addAction(self.menu.menuAction())
+        self.menubar.addAction(self.menuTools.menuAction())
         self.menu.addAction(self.actionAbout)
+        self.menuTools.addAction(self.actionGenerateStochastic)
 
         self.retranslateUi(MainWindow)
 
@@ -416,6 +422,7 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"NC92-Soil", None))
         self.actionAbout.setText(QCoreApplication.translate("MainWindow", u"About", None))
+        self.actionGenerateStochastic.setText(QCoreApplication.translate("MainWindow", u"Generate stochastic input", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)
@@ -533,5 +540,6 @@ class Ui_MainWindow(object):
         self.label_23.setText(QCoreApplication.translate("MainWindow", u"Bedrock depth", None))
         self.pushButton_loadBatch.setText(QCoreApplication.translate("MainWindow", u"Load batch file", None))
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"?", None))
+        self.menuTools.setTitle(QCoreApplication.translate("MainWindow", u"Tools", None))
     # retranslateUi
 
