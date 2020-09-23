@@ -1378,8 +1378,8 @@
     </property>
     <addaction name="actionGenerateStochastic"/>
    </widget>
-   <addaction name="menu"/>
    <addaction name="menuTools"/>
+   <addaction name="menu"/>
   </widget>
   <action name="actionAbout">
    <property name="text">

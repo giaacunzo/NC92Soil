@@ -399,8 +399,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if batchAnalysis:
             profilePermutations = batchOptions['profilePermutations']
             vsList = batchOptions['vsList']
+            stdList = batchOptions['curveStd']
         else:  # Analysis with input from GUI
             vsList = None
+            stdList = None
             if analysisType == 'Permutations':
                 bedrockDepth = float(self.lineEdit_bedDepth.text())
                 brickSize = float(self.lineEdit_brickSize.text())
@@ -443,7 +445,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
 
             profileList = SRALib.addDepths(profiloCorrente)  # Add depths to current profile
-            currentSoilList, profileList = SRALib.addVariableProperties(soilList, profileList, vsList)
+            currentSoilList, profileList, curveStd = SRALib.addVariableProperties(
+                soilList, profileList, vsList, stdList)
             profileSoilNames = [strato[2] for strato in profileList]
             profileSoilThick = [str(strato[1]) for strato in profileList]
             profileVs = [strato[-1] for strato in profileList]
@@ -460,7 +463,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
             for fileName in currentData.keys():
 
-                OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList, analysisDB)
+                OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList, analysisDB,
+                                                  curveStd)
 
                 # Esportazione output
                 for risultato in OutputResult:
@@ -591,7 +595,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
     def loadBatch(self):
         batchFile = QFileDialog.getOpenFileName(self, caption="Choose the input batch file",
                                                 filter='Excel Files (*.xlsx)')
-        if len(batchFile) == 0:
+        if batchFile[0] == "":
             return None
         else:
             self.batchObject = BatchAnalyzer(batchFile[0])
@@ -605,7 +609,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         """
         stochasticFile = QFileDialog.getOpenFileName(self, caption="Choose the input stochastic file",
                                                      filter='Excel Files (*.xlsx)')
-        if len(stochasticFile) == 0:
+        if stochasticFile[0] == "":
             return None
         else:
             stochasticObject = StochasticAnalyzer(stochasticFile[0])
@@ -614,9 +618,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             # Generation of the random profile
             stochasticObject.generateRndProfile()
 
-        exportFilename = QFileDialog.getSaveFileName(self, caption="Choose the input stochastic file",
+        exportFilename = QFileDialog.getSaveFileName(self, caption="Choose the output batch file",
                                                      filter='Excel Files (*.xlsx)')
-        if len(exportFilename) == 0:
+        if exportFilename[0] == "":
             return None
         else:
             stochasticObject.exportExcel(exportFilename[0])
@@ -686,7 +690,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     # Running analysis
                     batchOptions = {'batchType': 'permutations', 'inputSet': currentMotions,
                                     'outputFolder': currentFolder, 'currentPrefix': currentName,
-                                    'profilePermutations': profilePermutations, 'vsList': None}
+                                    'profilePermutations': profilePermutations, 'vsList': None,
+                                    'curveStd': None}
                     self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
         # Batch analysis with profiles
@@ -700,6 +705,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 os.mkdir(profilesOutputFolder)
             except FileExistsError:
                 pass
+
+            # Getting information about degradation curves std
+            curveStdVector = batchObject.getDegradationCurveStd()
 
             for profileIndex in range(numberProfiles):
                 currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
@@ -731,7 +739,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     # Running analysis
                     batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions, 'outputFolder': currentFolder,
                                     'currentPrefix': currentName, 'profilePermutations': [currentProfile],
-                                    'vsList': currentVsList}
+                                    'vsList': currentVsList, 'curveStd': curveStdVector}
                     self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')

@@ -124,6 +124,10 @@ class BatchAnalyzer:
         self.clusterNumber = len(currentClusters)
         self.profileNumber = currentProfiles.shape[1]
 
+        # Check for Std column
+        if 'Curve Std' not in self._rawSoils.columns:
+            self._rawSoils['Curve Std'] = np.nan
+
     def getSoilTable(self, vsIndex):
         soilTable = list()
         for index, row in self._rawSoils.iterrows():
@@ -133,6 +137,11 @@ class BatchAnalyzer:
             rowList[3] = rowList[3] if not np.isnan(rowList[3]) else None  # To [m]
             soilTable.append(rowList)
         return soilTable
+
+    def getDegradationCurveStd(self):
+        subSection = self._rawSoils[['Soil name', 'Curve Std']]
+
+        return [list(row) for index, row in subSection.iterrows()]
 
     def getClusterInfo(self, clusterIndex):
         permutationTable = list()
@@ -196,9 +205,9 @@ class StochasticAnalyzer:
         else:
             self.randomSeed = currentStochastic['Random seed'][0]
 
+        # Parsing the vs law expression
         for index, vsLaw in enumerate(currentStochastic['Vs Law']):
             vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
-            # currentStochastic['Vs Law'][index] = vsLawObject
             currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
         self._rawGroups = currentStochastic.iloc[:, :9]
@@ -297,7 +306,8 @@ class StochasticAnalyzer:
         currentProfileName = "P{}".format(existingDFSize + 1)
         self._correlationsDF[currentProfileName] = pd.Series(correlationCoeffList)
 
-    def getCorrelationVector(self, currentLayeredProfile, currentLaw):
+    @staticmethod
+    def getCorrelationVector(currentLayeredProfile, currentLaw):
 
         if currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
             genericModelName = currentLaw.lower().split('toro:')[1].strip().upper()
@@ -331,10 +341,10 @@ class StochasticAnalyzer:
         """
         # Generating soil sheet
         soilDF = pd.DataFrame(columns=['Soil name', 'Unit weight\n[KN/m3]', 'From\n[m]', 'To\n[m]',
-                                       'Vs\n[m/s]', 'Degradation curve'])
+                                       'Vs\n[m/s]', 'Degradation curve', 'Curve Std'])
         for index, group in self._rawGroups.iterrows():
             currentRow = [group['Group name'], group['Unit weight\n[KN/m3]'], "", "", "",
-                          group['Degradation curve\nMean']]
+                          group['Degradation curve\nMean'], group['Degradation curve\nStd']]
             soilDF.loc[index] = currentRow
 
         with pd.ExcelWriter(filename, mode='w') as writer:
@@ -357,4 +367,51 @@ class LayerLikeObj:
     def __init__(self, layerList):
         self.depth_mid = layerList[0]
 
+
+class SoilPropertyVariatorOLD:
+    """
+    Class for handling randomly variated soil property curves
+    """
+    def __init__(self, meanCurves, curveStds, GLimits=(0.05, 1), DLimits=(0.001, 0.25),
+                 truncation=2, correlation=-0.5):
+        self._GLimits = GLimits
+        self._DLimits = DLimits
+        self._meanCurves = meanCurves
+        self._curveStds = curveStds
+        self.randGenerator = pysra.variation.TruncatedNorm(truncation)
+        self._correlation = correlation
+
+    def getGenericVariated(self):
+        """
+        Generates a variated curve given mean value and std deviation
+        :return: nx3 array with the generated curve
+        """
+        # Generates a pair of correlated random variables
+        randomVars = self.randGenerator.correlated(self._correlation)
+
+        # Computing variated G curve
+        GVariated = list()
+        for value in self._meanCurves[:, 1]:
+            currentValue = value + randomVars[0] * self._curveStds[0]
+            if currentValue < self._GLimits[0]:
+                currentValue = self._GLimits[0]
+            elif currentValue > self._GLimits[1]:
+                currentValue = self._GLimits[1]
+            GVariated.append(currentValue)
+
+        GVariated = np.array(GVariated)
+
+        # Computing variated D curve
+        DVariated = list()
+        for value in self._meanCurves[:, 2]:
+            currentValue = value + randomVars[1] * self._curveStds[1]
+            if currentValue < self._DLimits[0]:
+                currentValue = self._DLimits[0]
+            elif currentValue > self._DLimits[1]:
+                currentValue = self._DLimits[1]
+            DVariated.append(currentValue)
+
+        DVariated = np.array(DVariated)
+
+        return np.stack([self._meanCurves[:, 0], GVariated, DVariated], axis=1)
 

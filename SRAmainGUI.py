@@ -409,8 +409,8 @@ class Ui_MainWindow(object):
         self.menuTools.setObjectName(u"menuTools")
         MainWindow.setMenuBar(self.menubar)
 
-        self.menubar.addAction(self.menu.menuAction())
         self.menubar.addAction(self.menuTools.menuAction())
+        self.menubar.addAction(self.menu.menuAction())
         self.menu.addAction(self.actionAbout)
         self.menuTools.addAction(self.actionGenerateStochastic)
 

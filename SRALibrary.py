@@ -268,15 +268,27 @@ def addDepths(profileList):
     return newProfile
 
 
-def addVariableProperties(soilList, profileList, vsList=None):
+def addVariableProperties(soilList, profileList, vsList=None, stdList=None):
     # Expanding soil list
     newSoilList = list()
+    if stdList:
+        newStdList = list()
+    else:
+        newStdList = None
+
     for indice, layer in enumerate(profileList):
         currentCentroid = layer[0] + layer[1] / 2
         currentSoilName = layer[2]
-        currentSoilDef = [row for row in soilList
-                          if (row[0] == currentSoilName and row[2] <= currentCentroid < row[3])][0]
-        A = 5
+        # If stdList is given also information about degradation curves standard deviation is obtained
+        if stdList:
+            currentSoilDef = [(row, index) for index, row in enumerate(soilList)
+                              if (row[0] == currentSoilName and row[2] <= currentCentroid < row[3])][0]
+            newStdList.append(stdList[currentSoilDef[1]][1])
+            currentSoilDef = currentSoilDef[0]
+        else:
+            currentSoilDef = [row for row in soilList
+                              if (row[0] == currentSoilName and row[2] <= currentCentroid < row[3])][0]
+
         newSoilName = '{}[{}]'.format(currentSoilDef[0], indice)
         newSoilRow = [newSoilName, currentSoilDef[1], currentSoilDef[-1]]
         newSoilList.append(newSoilRow)
@@ -288,7 +300,7 @@ def addVariableProperties(soilList, profileList, vsList=None):
         else:
             layer.append(currentSoilDef[4])
 
-    return newSoilList, profileList
+    return newSoilList, profileList, newStdList
 
 
 def table2list(soilTable, profileTable, permutationTable):
@@ -334,7 +346,7 @@ def table2list(soilTable, profileTable, permutationTable):
     return soilList, profileList, permutationList
 
 
-def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None):
+def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, graphWait=None):
     if graphWait is not None:
         waitBar = graphWait[0]
         App = graphWait[1]
@@ -348,7 +360,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
     # Soil table analysis
     curveDict = analysisDict['CurveDB']
     soilDict = dict()
-    for riga in soilList:
+    for index, riga in enumerate(soilList):
         currentSoilName, currentSoilWeight, currentCurveName = riga
         currentCurve = curveDict[currentCurveName]
         currentNonLinearityG = pysra.site.NonlinearProperty('', currentCurve[:, 0],
@@ -357,6 +369,18 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, graphWait=None
                                                             currentCurve[:, 2], param='damping')
         currentSoilObj = pysra.site.SoilType(currentSoilName, float(currentSoilWeight), mod_reduc=currentNonLinearityG,
                                              damping=currentNonLinearityD)
+
+        # If a standard deviation is specified a variated generation curve is generated
+        if curveStd:
+            currentStd = curveStd[index]
+            if isinstance(currentStd, str) and currentStd.lower() == 'darendeli':
+                # Initializing the soil permutator
+                permutatorObj = pysra.variation.DarendeliVariation(-0.5)
+                currentSoilObj = permutatorObj(currentSoilObj)
+            else:
+                # TO BE IMPLEMENTED
+                pass
+
         soilDict[currentSoilName] = currentSoilObj
 
     # Defining bedrock soil
