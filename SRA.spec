@@ -2,8 +2,10 @@
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import copy_metadata
 block_cipher = None
+import sys
 
 
+sys.setrecursionlimit(3000)
 a = Analysis(['SRA.py'],
              pathex=['C:\\Users\\giaac\\Documents\\Repo Git\\GitLab\\SRA Software\\GUI'],
              binaries=[],

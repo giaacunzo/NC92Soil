@@ -74,7 +74,8 @@ class BriefReportOutput(pysra.output.Output):
         self.maxValuesDict.update(AFDict)
         self.updateValues()
 
-    def calcVs30(self, calc):
+    @staticmethod
+    def calcVs30(calc):
         currentThickness = list(calc.profile.thickness).copy()
         currentVelocities = list(calc.profile.initial_shear_vel).copy()
         if max(calc.profile.depth) < 30:
@@ -123,6 +124,7 @@ class BatchAnalyzer:
         self.vsNumber = currentSoils['Vs\n[m/s]'][0].count(';') + 1
         self.clusterNumber = len(currentClusters)
         self.profileNumber = currentProfiles.shape[1]
+        self.filename = filename
 
         # Check for Std column
         if 'Curve Std' not in self._rawSoils.columns:
@@ -196,23 +198,36 @@ class StochasticAnalyzer:
 
     def __init__(self, filename):
         currentStochastic = pd.read_excel(filename, sheet_name='Stochastic')
+
         self.numberIterations = int(currentStochastic['Number of iterations'][0])
         self.correlationMode = currentStochastic['Correlation mode'][0]
 
         # Check of random seed
-        if np.isnan(currentStochastic['Random seed'][0]) or currentStochastic['Random seed'].strip() == "":
+        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'], float):
             self.randomSeed = None
         else:
-            self.randomSeed = currentStochastic['Random seed'][0]
+            self.randomSeed = int(currentStochastic['Random seed'][0])
 
         # Parsing the vs law expression
         for index, vsLaw in enumerate(currentStochastic['Vs Law']):
             vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
             currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
-        self._rawGroups = currentStochastic.iloc[:, :9]
+        self.idList = sorted(set(currentStochastic['ID CODE']))
+        self._allData = currentStochastic.iloc[:, :10]
+        self._rawGroups = pd.DataFrame()
         self._profileDF = pd.DataFrame()
         self._correlationsDF = pd.DataFrame()
+
+    def resetDataFrames(self):
+        self._profileDF = pd.DataFrame()
+        self._correlationsDF = pd.DataFrame()
+        self._rawGroups = pd.DataFrame()
+
+    def updateByID(self, id_code):
+        self.resetDataFrames()
+        self._rawGroups = self._allData[self._allData['ID CODE'] == id_code]
+        self._rawGroups.reset_index(inplace=True)
 
     def parseLaw(self, lawIndex, depth):
         """
@@ -414,4 +429,3 @@ class SoilPropertyVariatorOLD:
         DVariated = np.array(DVariated)
 
         return np.stack([self._meanCurves[:, 0], GVariated, DVariated], axis=1)
-

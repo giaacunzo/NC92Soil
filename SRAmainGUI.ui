@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1319</width>
+    <width>1383</width>
     <height>910</height>
    </rect>
   </property>
@@ -1312,6 +1312,22 @@
      <string>Load batch file</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="checkBox_updatePlots">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>1170</x>
+      <y>250</y>
+      <width>171</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Update plot (batch only)</string>
+    </property>
+   </widget>
    <zorder>tableWidget_Permutations</zorder>
    <zorder>tableWidget_Profile</zorder>
    <zorder>pushButton_loadBatch</zorder>
@@ -1356,13 +1372,14 @@
    <zorder>lineEdit_bedDepth</zorder>
    <zorder>label_22</zorder>
    <zorder>label_23</zorder>
+   <zorder>checkBox_updatePlots</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1319</width>
+     <width>1383</width>
      <height>26</height>
     </rect>
    </property>
