@@ -198,9 +198,11 @@ class StochasticAnalyzer:
 
     def __init__(self, filename):
         currentStochastic = pd.read_excel(filename, sheet_name='Stochastic')
+        currentGroupsDef = pd.read_excel(filename, sheet_name='Group definitions')
 
         self.numberIterations = int(currentStochastic['Number of iterations'][0])
         self.correlationMode = currentStochastic['Correlation mode'][0]
+        self.vsLimit = currentStochastic['Bedrock Vs\n[m/s]'][0]
 
         # Check of random seed
         if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'], float):
@@ -208,16 +210,31 @@ class StochasticAnalyzer:
         else:
             self.randomSeed = int(currentStochastic['Random seed'][0])
 
+        # Merging with "Group definition" sheet
+        currentStochastic = self.merge_sheets(currentStochastic, currentGroupsDef)
+
         # Parsing the vs law expression
         for index, vsLaw in enumerate(currentStochastic['Vs Law']):
             vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
             currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
         self.idList = sorted(set(currentStochastic['ID CODE']))
-        self._allData = currentStochastic.iloc[:, :10]
+        self._allData = currentStochastic.iloc[:, :11]
         self._rawGroups = pd.DataFrame()
         self._profileDF = pd.DataFrame()
         self._correlationsDF = pd.DataFrame()
+
+    @staticmethod
+    def merge_sheets(currentStochastic, currentGroupsDef):
+        for index, row in currentStochastic.iterrows():
+            # Checking fields
+            fields_list = currentGroupsDef.columns[1:]
+            for field in fields_list:
+                if isinstance(row[field], float) and np.isnan(row[field]):
+                    currentGroupName = row['Group name']
+                    currentGroupRow = currentGroupsDef[currentGroupsDef['Group name'] == currentGroupName]
+                    currentStochastic.loc[index, field] = currentGroupRow[field].values
+        return currentStochastic
 
     def resetDataFrames(self):
         self._profileDF = pd.DataFrame()
@@ -239,7 +256,7 @@ class StochasticAnalyzer:
         """
 
         currentVsLaw = self._rawGroups['Vs Law'][lawIndex]
-        return currentVsLaw.subs('x', depth).evalf()
+        return currentVsLaw.subs('H', depth).evalf()
 
     def generateRndProfile(self):
         np.random.seed(self.randomSeed)
@@ -248,10 +265,15 @@ class StochasticAnalyzer:
         currentDepth = 0
         layeredProfile = []
         layeredSplitted = []
+        totalDepth = 0
         for index, group in self._rawGroups.iterrows():
             currentLayeredProfile = []
             groupName = group['Group name']
-            groupThickness = np.random.randint(group['Min thickness\n[m]'], group['Max thickness\n[m]'] + 1)
+            if index == len(self._rawGroups) - 1:
+                groupThickness = 100 - totalDepth
+            else:
+                groupThickness = np.random.randint(group['Min thickness\n[m]'], group['Max thickness\n[m]'] + 1)
+                totalDepth += groupThickness
 
             for counter in range(groupThickness):
                 currentCentroid = currentDepth + 1/2
@@ -259,7 +281,7 @@ class StochasticAnalyzer:
 
                 # Evaluating mean Vs value from the given relation
                 meanVsValue = self.parseLaw(index, currentCentroid)
-                stdVsValue = group['Vs Std']
+                stdVsValue = group['Sigma logn']
                 currentLayeredProfile.append([currentCentroid, 1, groupName, meanVsValue, stdVsValue])
 
             layeredProfile.extend(currentLayeredProfile)  # Extending final profile list
@@ -283,11 +305,13 @@ class StochasticAnalyzer:
         for index, layer, correlation in zip(range(len(layeredProfile)), layeredProfile, correlationCoeffList):
 
             # Computing lognormal parameters
-            layerMean = float(layer[3])
-            layerStd = float(layer[4])
-
-            muLogn = np.log(layerMean**2/(layerStd**2 + layerMean**2)**0.5)
-            sigmaLogn = (np.log(layerStd**2/layerMean**2 + 1))**0.5
+            # layerMean = float(layer[3])
+            # layerStd = float(layer[4])
+            #
+            # muLogn = np.log(layerMean**2/(layerStd**2 + layerMean**2)**0.5)
+            # sigmaLogn = (np.log(layerStd**2/layerMean**2 + 1))**0.5
+            muLogn = np.log(float(layer[3]))
+            sigmaLogn = float(layer[4])
 
             # Getting standard normal random variable for i-th layer (epsilon_i)
             standardNormValue = np.random.standard_normal(1)
@@ -304,8 +328,36 @@ class StochasticAnalyzer:
             # Appending generated layer in list
             finalLayers.append([layer[1], layer[2], float(currentVs)])
 
+        # RIPARTIRE DA QUI (INSERIRE TAGLIO PROFILI IN BASE A LIMITE VS)
+        finalLayers = self.cutOnThreshold(finalLayers)
+
         self.makeProfileColumn(finalLayers)
         self.makeCorrelationColumn(correlationCoeffList)
+
+    def cutOnThreshold(self, finalLayers):
+        vsValues = [[index, float(current_vs[0]), float(current_vs[2])]
+                    for index, current_vs in enumerate(finalLayers)]
+        over_threshold = [index for index, _, value in vsValues if value >= self.vsLimit]
+
+        if len(over_threshold) == 0:
+            return finalLayers
+
+        current_index = over_threshold[0]
+        current_remaining = finalLayers[current_index + 1:]
+
+        remaining_vs = 0
+        while len(current_remaining) > 0 and remaining_vs < self.vsLimit:
+            current_num = sum([value[0] for value in current_remaining])
+            current_denom = sum([thickness/value for thickness, _, value in current_remaining])
+            remaining_vs = current_num / current_denom
+
+            current_index += 1
+            current_remaining.pop(0)
+
+        if len(current_remaining) == 0:
+            return finalLayers
+        else:
+            return finalLayers[:current_index]
 
     def makeProfileColumn(self, finalLayers):
         existingDFSize = len(self._profileDF.columns)
@@ -322,7 +374,7 @@ class StochasticAnalyzer:
         self._correlationsDF[currentProfileName] = pd.Series(correlationCoeffList)
 
     @staticmethod
-    def getCorrelationVector(currentLayeredProfile, currentLaw):
+    def getCorrelationVector(currentLayeredProfile, currentLaw, var_name_depth='H', var_name_thick='T'):
 
         if currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
             genericModelName = currentLaw.lower().split('toro:')[1].strip().upper()
@@ -339,7 +391,7 @@ class StochasticAnalyzer:
             currentCoeff = []
             symbolicParse = sympy.sympify(currentLaw)
             for layer in currentLayeredProfile[1:]:
-                currentValue = symbolicParse.subs('x', layer[0]).subs('y', layer[1])
+                currentValue = symbolicParse.subs(var_name_depth, layer[0]).subs(var_name_thick, layer[1])
                 currentCoeff.append(currentValue)
 
         # Adding uncorrelated first layer at the beginning of the list
@@ -381,6 +433,39 @@ class LayerLikeObj:
 
     def __init__(self, layerList):
         self.depth_mid = layerList[0]
+
+
+class GenericSoilVariator(pysra.variation.SoilTypeVariation):
+    """
+    Generic soil variator with custom equation
+    """
+    def __init__(self, correlation, GFunc, DFunc):
+        super().__init__(correlation=correlation)
+        self._GFunc = sympy.sympify(GFunc.replace('^', '**'))
+        self._DFunc = sympy.sympify(DFunc.replace('^', '**'))
+
+    def _get_varied(self, randvar, mod_reduc, damping):
+        mod_reduc_means = mod_reduc
+        mod_reduc_stds = self.calc_std_mod_reduc(mod_reduc_means)
+        varied_mod_reduc = mod_reduc_means + randvar[0] * mod_reduc_stds
+
+        damping_means = damping
+        damping_stds = self.calc_std_damping(damping_means)
+        varied_damping = damping_means + randvar[1] * damping_stds
+
+        return varied_mod_reduc, varied_damping
+
+    def calc_std_mod_reduc(self, mod_reduc, var_name='G'):
+        mod_reduc = np.asarray(mod_reduc).astype(float)
+        std = [self._GFunc.subs(var_name, mod_value).evalf()
+               for mod_value in mod_reduc]
+        return np.array(std)
+
+    def calc_std_damping(self, damping, var_name='D'):
+        damping = np.asarray(damping).astype(float)
+        std = [self._DFunc.subs(var_name, damp_value).evalf()
+               for damp_value in damping]
+        return np.array(std)
 
 
 class SoilPropertyVariatorOLD:

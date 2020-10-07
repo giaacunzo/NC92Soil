@@ -20,7 +20,7 @@ from pygame import mixer, error as pygameexception
 def aboutMessage():
     mixer.init()
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.7 beta\n"
+    Messaggio.setText("NC92-Soil\nversion 0.8 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil")
     try:

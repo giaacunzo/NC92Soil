@@ -373,12 +373,17 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
         # If a standard deviation is specified a variated generation curve is generated
         if curveStd:
             currentStd = curveStd[index]
-            if isinstance(currentStd, str) and currentStd.lower() == 'darendeli':
+            if isinstance(currentStd, float) and np.isnan(currentStd):
+                pass
+            elif isinstance(currentStd, str) and currentStd.lower() == 'darendeli':
                 # Initializing the soil permutator
                 permutatorObj = pysra.variation.DarendeliVariation(-0.5)
                 currentSoilObj = permutatorObj(currentSoilObj)
-            else:
-                # TO BE IMPLEMENTED
+            else:  # Custom equation parse
+                GFunc = currentStd.split(';')[0]
+                DFunc = currentStd.split(';')[-1]
+                permutatorObj = SRAClasses.GenericSoilVariator(-0.5, GFunc, DFunc)
+                currentSoilObj = permutatorObj(currentSoilObj)
                 pass
 
         soilDict[currentSoilName] = currentSoilObj
