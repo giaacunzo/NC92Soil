@@ -2,6 +2,8 @@ import pysra
 import numpy as np
 import pandas as pd
 import sympy
+import SRALibrary as NCLib
+import os
 
 
 class BriefReportOutput(pysra.output.Output):
@@ -328,7 +330,6 @@ class StochasticAnalyzer:
             # Appending generated layer in list
             finalLayers.append([layer[1], layer[2], float(currentVs)])
 
-        # RIPARTIRE DA QUI (INSERIRE TAGLIO PROFILI IN BASE A LIMITE VS)
         finalLayers = self.cutOnThreshold(finalLayers)
 
         self.makeProfileColumn(finalLayers)
@@ -468,49 +469,213 @@ class GenericSoilVariator(pysra.variation.SoilTypeVariation):
         return np.array(std)
 
 
-class SoilPropertyVariatorOLD:
+class ClusterPermutator:
     """
-    Class for handling randomly variated soil property curves
+    Class for handling the generation of batch input files for cluster permutations
     """
-    def __init__(self, meanCurves, curveStds, GLimits=(0.05, 1), DLimits=(0.001, 0.25),
-                 truncation=2, correlation=-0.5):
-        self._GLimits = GLimits
-        self._DLimits = DLimits
-        self._meanCurves = meanCurves
-        self._curveStds = curveStds
-        self.randGenerator = pysra.variation.TruncatedNorm(truncation)
-        self._correlation = correlation
+    def __init__(self, filename, output_folder):
+        soil_definition = pd.read_excel(filename, sheet_name='Soils')
+        clusters_definition = pd.read_excel(filename, sheet_name='Clusters')
+        bedrock_definition = pd.read_excel(filename, sheet_name='Bedrocks')
 
-    def getGenericVariated(self):
-        """
-        Generates a variated curve given mean value and std deviation
-        :return: nx3 array with the generated curve
-        """
-        # Generates a pair of correlated random variables
-        randomVars = self.randGenerator.correlated(self._correlation)
+        self.soils = self.makeSoils(soil_definition)
+        self.bedrocks = self.makeSoils(bedrock_definition, variable_prop=False)
+        self.number_clusters = len(clusters_definition)
 
-        # Computing variated G curve
-        GVariated = list()
-        for value in self._meanCurves[:, 1]:
-            currentValue = value + randomVars[0] * self._curveStds[0]
-            if currentValue < self._GLimits[0]:
-                currentValue = self._GLimits[0]
-            elif currentValue > self._GLimits[1]:
-                currentValue = self._GLimits[1]
-            GVariated.append(currentValue)
+        name_list = ["{}-{}".format(row['Cluster'], row['Sub-cluster'])
+                     for _, row in clusters_definition.iterrows()]
+        self.name_list = name_list
 
-        GVariated = np.array(GVariated)
+        self._original_soil_names = set(soil_definition['Soil name'])
+        self._rawSoils = soil_definition
+        self._rawClusters = clusters_definition
+        self._rawBedrocks = bedrock_definition
+        self._output_folder = output_folder
 
-        # Computing variated D curve
-        DVariated = list()
-        for value in self._meanCurves[:, 2]:
-            currentValue = value + randomVars[1] * self._curveStds[1]
-            if currentValue < self._DLimits[0]:
-                currentValue = self._DLimits[0]
-            elif currentValue > self._DLimits[1]:
-                currentValue = self._DLimits[1]
-            DVariated.append(currentValue)
+    @staticmethod
+    def makeSoils(soil_definition, variable_prop=True):
+        if variable_prop:
+            for index, row in soil_definition.iterrows():
+                if np.isnan(row['From\n[m]']):
+                    soil_definition.loc[index, 'From\n[m]'] = 0
+                if np.isnan(row['To \n[m]']):
+                    soil_definition.loc[index, 'To \n[m]'] = 10000
 
-        DVariated = np.array(DVariated)
+        soil_names = set(soil_definition['Soil name'])
 
-        return np.stack([self._meanCurves[:, 0], GVariated, DVariated], axis=1)
+        soil_list = pd.DataFrame(columns=soil_definition.columns)
+        for soil in soil_names:
+            current_features = soil_definition[soil_definition['Soil name'] == soil]
+            current_features.reset_index(inplace=True)
+            for index, row in current_features.iterrows():
+                if variable_prop:
+                    row['Orig name'] = soil
+                    row['Soil name'] = "{}[{}]".format(soil, index)
+
+                soil_list = soil_list.append(row, ignore_index=True)
+
+        # Parsing Vs laws
+        for index, row in soil_list.iterrows():
+            soil_list.loc[index, 'Vs law'] = sympy.sympify(row['Vs law'])
+
+        return soil_list
+
+    def makeClusterProfiles(self, row_index):
+        current_cluster = self._rawClusters.iloc[row_index]
+        current_input = current_cluster['Input files']
+
+        brickedProfile = self.makeBricks(current_cluster)
+
+        bricked_permutations = NCLib.calcPermutations(brickedProfile, True)
+
+        if current_cluster['Add geological bedrock'] == 'Y':
+            final_permutations = list()
+            bricked_permutations_tuple = [self.addBedrock(profile) for profile in bricked_permutations]
+            for profile_package in bricked_permutations_tuple:
+                for profile in profile_package:
+                    final_permutations.append(profile)
+        else:
+            final_permutations = bricked_permutations
+
+        complete_profiles = [self.addVs(NCLib.addDepths(profile)) for profile in final_permutations]
+        cluster_info_dict = {'Subcluster': current_cluster['Sub-cluster'],
+                             'Cluster name': current_cluster['Cluster'],
+                             'Input list': current_input}
+
+        self.writeProfile(complete_profiles, cluster_info_dict)
+
+    def writeProfile(self, complete_profiles, cluster_info_dict):
+        onlyname = "{}-{}.xlsx".format(cluster_info_dict['Cluster name'],
+                                       cluster_info_dict['Subcluster'])
+        filename = os.path.join(self._output_folder, onlyname)
+
+        # Creating soil sheet
+        soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
+        soil_sheet['Curve Std'] = ""
+        soil_sheet['Vs\n[m/s]'] = ""
+        soil_sheet.to_excel(filename, index=False)
+
+        # Creating profile sheet
+        profileDF = pd.DataFrame()
+
+        for index, profile in enumerate(complete_profiles):
+            current_name = "P{}".format(index + 1)
+            current_input = cluster_info_dict['Input list']
+
+            profile_list = list()
+
+            for layer in profile:
+                profile_list.append("{};{};{}".format(*layer))
+            profile_list.insert(0, current_input)
+
+            profileDF[current_name] = pd.Series(profile_list)
+
+        # Generating profiles, correlations and empty clusters sheets
+        with pd.ExcelWriter(filename, mode='a') as writer:
+            profileDF.to_excel(writer, sheet_name='Profiles', index=False)
+            emptyClusterSheet = pd.DataFrame(columns=['Cluster', 'Sub-cluster', 'Bedrock depth\n[m]',
+                                                      'Brick thickness\n[m]', 'Input files'])
+            emptyClusterSheet.to_excel(writer, sheet_name='Clusters', index=False)
+
+    @staticmethod
+    def makeBricks(cluster_info):
+        bedrock_depth = cluster_info['Bedrock depth\n[m]']
+        brick_size = cluster_info['Brick thickness\n[m]']
+        soil_info = cluster_info.iloc[6:]
+
+        new_profile = list()
+        for soil, percentage in soil_info.iteritems():
+            currentThickness = round(bedrock_depth * percentage / 100, 2)
+            numberBricks = int(np.floor(currentThickness / brick_size))
+
+            for strato in range(numberBricks):
+                if strato != numberBricks - 1:
+                    stratoThickness = brick_size
+                else:
+                    stratoThickness = currentThickness - brick_size * (numberBricks - 1)
+                new_profile.append([stratoThickness, soil])
+
+        return new_profile
+
+    def addVs(self, profile):
+
+        new_profile = list()
+        for depth, thickness, name in profile:
+            current_centroid = depth + thickness / 2
+            if name in self._original_soil_names:
+                # Associating name based on the depth
+                current_soil = self.soils[(self.soils['Orig name'] == name) &
+                                          (self.soils['From\n[m]'] <= current_centroid) &
+                                          (current_centroid <= self.soils['To \n[m]'])]
+                current_vs = current_soil['Vs law'].values[0].subs('H', current_centroid).evalf()
+                new_profile.append([name, thickness, current_vs])
+            else:
+                current_soil = self.bedrocks[self.bedrocks['Soil name'] == name]
+                current_vs = current_soil['Vs law'].values[0].subs('H', current_centroid).evalf()
+                new_profile.append([name, thickness, current_vs])
+
+        return new_profile
+
+    def addBedrock(self, profile, brick_size=3, max_depth=100, max_vs=800):
+        profile_depth = sum([thickness for thickness, _ in profile])
+
+        profiles_list = list()
+        for index, bedrock in self.bedrocks.iterrows():
+            current_depth = profile_depth
+            current_vs = 0
+            bedrock_layers = list()
+            while current_depth < max_depth and current_vs < max_vs:
+                current_centroid = current_depth + brick_size / 2
+                current_vs = bedrock['Vs law'].subs('H', current_centroid).evalf()
+                current_depth += brick_size
+                bedrock_layers.append((brick_size, bedrock['Soil name']))
+            profiles_list.append(profile + tuple(bedrock_layers))
+
+        return profiles_list
+
+# class SoilPropertyVariatorOLD:
+#     """
+#     Class for handling randomly variated soil property curves
+#     """
+#     def __init__(self, meanCurves, curveStds, GLimits=(0.05, 1), DLimits=(0.001, 0.25),
+#                  truncation=2, correlation=-0.5):
+#         self._GLimits = GLimits
+#         self._DLimits = DLimits
+#         self._meanCurves = meanCurves
+#         self._curveStds = curveStds
+#         self.randGenerator = pysra.variation.TruncatedNorm(truncation)
+#         self._correlation = correlation
+#
+#     def getGenericVariated(self):
+#         """
+#         Generates a variated curve given mean value and std deviation
+#         :return: nx3 array with the generated curve
+#         """
+#         # Generates a pair of correlated random variables
+#         randomVars = self.randGenerator.correlated(self._correlation)
+#
+#         # Computing variated G curve
+#         GVariated = list()
+#         for value in self._meanCurves[:, 1]:
+#             currentValue = value + randomVars[0] * self._curveStds[0]
+#             if currentValue < self._GLimits[0]:
+#                 currentValue = self._GLimits[0]
+#             elif currentValue > self._GLimits[1]:
+#                 currentValue = self._GLimits[1]
+#             GVariated.append(currentValue)
+#
+#         GVariated = np.array(GVariated)
+#
+#         # Computing variated D curve
+#         DVariated = list()
+#         for value in self._meanCurves[:, 2]:
+#             currentValue = value + randomVars[1] * self._curveStds[1]
+#             if currentValue < self._DLimits[0]:
+#                 currentValue = self._DLimits[0]
+#             elif currentValue > self._DLimits[1]:
+#                 currentValue = self._DLimits[1]
+#             DVariated.append(currentValue)
+#
+#         DVariated = np.array(DVariated)
+#
+#         return np.stack([self._meanCurves[:, 0], GVariated, DVariated], axis=1)

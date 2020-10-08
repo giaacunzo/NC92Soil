@@ -1394,6 +1394,8 @@
      <string>Tools</string>
     </property>
     <addaction name="actionGenerateStochastic"/>
+    <addaction name="separator"/>
+    <addaction name="actionGeneratePermutated"/>
    </widget>
    <addaction name="menuTools"/>
    <addaction name="menu"/>
@@ -1406,6 +1408,11 @@
   <action name="actionGenerateStochastic">
    <property name="text">
     <string>Generate stochastic input</string>
+   </property>
+  </action>
+  <action name="actionGeneratePermutated">
+   <property name="text">
+    <string>Generate permutated input (beta)</string>
    </property>
   </action>
  </widget>

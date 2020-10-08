@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -89,6 +89,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.actionAbout.triggered.connect(aboutMessage)
         self.pushButton_loadBatch.clicked.connect(self.loadBatch)
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
+        self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -610,6 +611,39 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 self.batchObject.append(BatchAnalyzer(element))
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
+
+    def generatePermutatedProfiles(self):
+        inputFile = QFileDialog.getOpenFileName(self, caption="Choose the input for cluster analysis",
+                                                filter='Excel Files (*.xlsx)')
+        if inputFile[0] == "":
+            return None
+
+        outputFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files")
+
+        if outputFolder == "":
+            return None
+
+        loadClustersObj = ClusterPermutator(inputFile[0], outputFolder)
+
+        waitBar = QProgressDialog("Exporting batch files..", "Cancel", 0,
+                                  loadClustersObj.number_clusters)
+
+        waitBar.setWindowTitle('NC92-Soil Permutator')
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        fileCounter = 1
+        for index, id_code in enumerate(loadClustersObj.name_list):
+            waitBar.setLabelText('Generating batch input for ID code "{}"'.format(id_code))
+            App.processEvents()
+            loadClustersObj.makeClusterProfiles(index)
+
+            waitBar.setValue(fileCounter)
+            fileCounter += 1
+
+        QMessageBox.information(QMessageBox(), 'OK',
+                                'Batch files for permutation analysis have been correctly exported')
 
     def loadStochastic(self):
         """
