@@ -221,7 +221,7 @@ class StochasticAnalyzer:
             currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
         self.idList = sorted(set(currentStochastic['ID CODE']))
-        self._allData = currentStochastic.iloc[:, :11]
+        self._allData = currentStochastic
         self._rawGroups = pd.DataFrame()
         self._profileDF = pd.DataFrame()
         self._correlationsDF = pd.DataFrame()
@@ -258,7 +258,9 @@ class StochasticAnalyzer:
         """
 
         currentVsLaw = self._rawGroups['Vs Law'][lawIndex]
-        return currentVsLaw.subs('H', depth).evalf()
+        currentLimit = self._rawGroups['Maximum depth\n[m]'][lawIndex]
+
+        return currentVsLaw.subs('H', currentLimit).evalf()
 
     def generateRndProfile(self):
         np.random.seed(self.randomSeed)
@@ -294,12 +296,15 @@ class StochasticAnalyzer:
         if self.correlationMode == 'Single groups':
             for index, group in self._rawGroups.iterrows():
                 currentCorrelationName = group['Inter-layer correlation']
+                currentLimit = group['Maximum depth\n[m]']
 
-                currentCoeff = self.getCorrelationVector(layeredSplitted[index], currentCorrelationName)
+                currentCoeff = self.getCorrelationVector(layeredSplitted[index], currentCorrelationName, currentLimit)
                 correlationCoeffList.extend(currentCoeff)
         else:
             firstCorrelationName = self._rawGroups['Inter-layer correlation'][0]
-            correlationCoeffList = self.getCorrelationVector(layeredProfile, firstCorrelationName)
+            firstCorrelationLimit = self._rawGroups['Maximum depth\n[m]'][0]
+            correlationCoeffList = self.getCorrelationVector(layeredProfile, firstCorrelationName,
+                                                             firstCorrelationLimit)
 
         # Generating random Vs profile
         finalLayers = []
@@ -375,7 +380,8 @@ class StochasticAnalyzer:
         self._correlationsDF[currentProfileName] = pd.Series(correlationCoeffList)
 
     @staticmethod
-    def getCorrelationVector(currentLayeredProfile, currentLaw, var_name_depth='H', var_name_thick='T'):
+    def getCorrelationVector(currentLayeredProfile, currentLaw, currentLimit=np.nan,
+                             var_name_depth='H', var_name_thick='T'):
 
         if currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
             genericModelName = currentLaw.lower().split('toro:')[1].strip().upper()
@@ -392,7 +398,10 @@ class StochasticAnalyzer:
             currentCoeff = []
             symbolicParse = sympy.sympify(currentLaw)
             for layer in currentLayeredProfile[1:]:
-                currentValue = symbolicParse.subs(var_name_depth, layer[0]).subs(var_name_thick, layer[1])
+                if np.isnan(currentLimit):  # No limit depth for correlation specified
+                    currentValue = symbolicParse.subs(var_name_depth, layer[0]).subs(var_name_thick, layer[1])
+                else:
+                    currentValue = symbolicParse.subs(var_name_depth, currentLimit).subs(var_name_thick, layer[1])
                 currentCoeff.append(currentValue)
 
         # Adding uncorrelated first layer at the beginning of the list
@@ -553,7 +562,7 @@ class ClusterPermutator:
         soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
         soil_sheet['Curve Std'] = ""
         soil_sheet['Vs\n[m/s]'] = ""
-        soil_sheet.to_excel(filename, index=False)
+        soil_sheet.to_excel(filename, index=False, sheet_name='Soils')
 
         # Creating profile sheet
         profileDF = pd.DataFrame()
