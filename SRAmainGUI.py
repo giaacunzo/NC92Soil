@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'SRAMainGUI.ui'
+## Form generated from reading UI file 'SRAmainGUI.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.14.2
 ##
@@ -29,6 +29,8 @@ class Ui_MainWindow(object):
         self.actionGenerateStochastic.setObjectName(u"actionGenerateStochastic")
         self.actionGeneratePermutated = QAction(MainWindow)
         self.actionGeneratePermutated.setObjectName(u"actionGeneratePermutated")
+        self.actionGenerate_NTC = QAction(MainWindow)
+        self.actionGenerate_NTC.setObjectName(u"actionGenerate_NTC")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.graphWidget = MplWidget(self.centralwidget)
@@ -422,6 +424,7 @@ class Ui_MainWindow(object):
         self.menuTools.addAction(self.actionGenerateStochastic)
         self.menuTools.addSeparator()
         self.menuTools.addAction(self.actionGeneratePermutated)
+        self.menuTools.addAction(self.actionGenerate_NTC)
 
         self.retranslateUi(MainWindow)
 
@@ -433,6 +436,7 @@ class Ui_MainWindow(object):
         self.actionAbout.setText(QCoreApplication.translate("MainWindow", u"About", None))
         self.actionGenerateStochastic.setText(QCoreApplication.translate("MainWindow", u"Generate stochastic input", None))
         self.actionGeneratePermutated.setText(QCoreApplication.translate("MainWindow", u"Generate permutated input (beta)", None))
+        self.actionGenerate_NTC.setText(QCoreApplication.translate("MainWindow", u"Generate NTC spectra", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)

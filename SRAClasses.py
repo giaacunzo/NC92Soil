@@ -4,6 +4,7 @@ import pandas as pd
 import sympy
 import SRALibrary as NCLib
 import os
+import csv
 
 
 class BriefReportOutput(pysra.output.Output):
@@ -213,18 +214,48 @@ class StochasticAnalyzer:
             self.randomSeed = int(currentStochastic['Random seed'][0])
 
         # Merging with "Group definition" sheet
-        currentStochastic = self.merge_sheets(currentStochastic, currentGroupsDef)
+        # currentStochastic = self.merge_sheets(currentStochastic, currentGroupsDef)
 
         # Parsing the vs law expression
-        for index, vsLaw in enumerate(currentStochastic['Vs Law']):
-            vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
-            currentStochastic.loc[index, 'Vs Law'] = vsLawObject
+        # for index, vsLaw in enumerate(currentStochastic['Vs Law']):
+        #     vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
+        #     currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
         self.idList = sorted(set(currentStochastic['ID CODE']))
         self._allData = currentStochastic
+        self._allSoils = self.makeSoils(currentGroupsDef)
         self._rawGroups = pd.DataFrame()
         self._profileDF = pd.DataFrame()
         self._correlationsDF = pd.DataFrame()
+
+    @staticmethod
+    def makeSoils(soil_sheet):
+
+        for index, row in soil_sheet.iterrows():
+            if np.isnan(row['From\n[m]']):
+                soil_sheet.loc[index, 'From\n[m]'] = 0
+            if np.isnan(row['To\n[m]']):
+                soil_sheet.loc[index, 'To\n[m]'] = 1000
+
+        # Parse the Vs laws
+        for index, vsLaw in enumerate(soil_sheet['Vs Law']):
+            vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
+            soil_sheet.loc[index, 'Vs Law'] = vsLawObject
+
+        new_sheet = pd.DataFrame(columns=soil_sheet.columns)
+        soils_set = set()
+        unique_soils = [soil for soil in soil_sheet['Group name']
+                        if soil not in soils_set and soils_set.add(soil) is None]
+
+        for soil in unique_soils:
+            current_defs = soil_sheet[soil_sheet['Group name'] == soil]
+            current_defs.reset_index(inplace=True)
+            for index, row in current_defs.iterrows():
+                row['Orig name'] = soil
+                row['Group name'] = "{}[{}]".format(soil, index) if len(current_defs) > 1 else soil
+                new_sheet = new_sheet.append(row, ignore_index=True)
+
+        return new_sheet
 
     @staticmethod
     def merge_sheets(currentStochastic, currentGroupsDef):
@@ -248,19 +279,26 @@ class StochasticAnalyzer:
         self._rawGroups = self._allData[self._allData['ID CODE'] == id_code]
         self._rawGroups.reset_index(inplace=True)
 
-    def parseLaw(self, lawIndex, depth):
+    def parseLaw(self, group_name, depth):
         """
 
-        :param lawIndex: index of the considered group
+        :param group_name: name of current soil
         :param depth: the value of depth at which vs mean value must be computed
 
         :return: the value of the mean Vs for normal distribution
         """
+        current_def = self._allSoils[(self._allSoils['Orig name'] == group_name) &
+                                      (self._allSoils['From\n[m]'] <= depth) &
+                                      (depth < self._allSoils['To\n[m]'])]
+        current_soil = current_def['Group name'].values[0]
+        currentVsLaw = current_def['Vs Law'].values[0]
+        current_sigma = current_def['Sigma logn'].values[0]
 
-        currentVsLaw = self._rawGroups['Vs Law'][lawIndex]
-        currentLimit = self._rawGroups['Maximum depth\n[m]'][lawIndex]
+        return current_soil, currentVsLaw.subs('H', depth).evalf(), current_sigma
 
-        return currentVsLaw.subs('H', currentLimit).evalf()
+    def parseCorrelation(self, group_name):
+        return self._allSoils[self._allSoils['Group name'] == group_name]['Inter-layer correlation'].values[0], \
+               self._allSoils[self._allSoils['Group name'] == group_name]['Maximum depth\n[m]'].values[0]
 
     def generateRndProfile(self):
         np.random.seed(self.randomSeed)
@@ -284,9 +322,8 @@ class StochasticAnalyzer:
                 currentDepth += 1
 
                 # Evaluating mean Vs value from the given relation
-                meanVsValue = self.parseLaw(index, currentCentroid)
-                stdVsValue = group['Sigma logn']
-                currentLayeredProfile.append([currentCentroid, 1, groupName, meanVsValue, stdVsValue])
+                soil_name, meanVsValue, stdVsValue = self.parseLaw(groupName, currentCentroid)
+                currentLayeredProfile.append([currentCentroid, 1, soil_name, meanVsValue, stdVsValue])
 
             layeredProfile.extend(currentLayeredProfile)  # Extending final profile list
             layeredSplitted.append(currentLayeredProfile)  # Adding current subprofile to the splitted list
@@ -295,14 +332,14 @@ class StochasticAnalyzer:
         correlationCoeffList = []
         if self.correlationMode == 'Single groups':
             for index, group in self._rawGroups.iterrows():
-                currentCorrelationName = group['Inter-layer correlation']
-                currentLimit = group['Maximum depth\n[m]']
+                currentCorrelationName, currentLimit = self.parseCorrelation(group['Group name'])
 
-                currentCoeff = self.getCorrelationVector(layeredSplitted[index], currentCorrelationName, currentLimit)
+                currentCoeff = self.getCorrelationVector(layeredSplitted[index], currentCorrelationName,
+                                                         currentLimit)
                 correlationCoeffList.extend(currentCoeff)
         else:
-            firstCorrelationName = self._rawGroups['Inter-layer correlation'][0]
-            firstCorrelationLimit = self._rawGroups['Maximum depth\n[m]'][0]
+            firstGroup = layeredProfile[0][2]
+            firstCorrelationName, firstCorrelationLimit = self.parseCorrelation(firstGroup)
             correlationCoeffList = self.getCorrelationVector(layeredProfile, firstCorrelationName,
                                                              firstCorrelationLimit)
 
@@ -320,33 +357,36 @@ class StochasticAnalyzer:
             muLogn = np.log(float(layer[3]))
             sigmaLogn = float(layer[4])
 
-            # Getting standard normal random variable for i-th layer (epsilon_i)
-            standardNormValue = np.random.standard_normal(1)
-
-            if index == 0:  # First layer of entire profile, no correlation needed
-                currentNormValue = standardNormValue
-                currentVs = np.exp(sigmaLogn*currentNormValue + muLogn)
+            if np.isnan(sigmaLogn):
+                currentVs = float(layer[3])
             else:
-                currentNormValue = correlation*lastNormValue + standardNormValue *\
-                                   (1 - correlation**2)**0.5
-                currentVs = np.exp(sigmaLogn*currentNormValue + muLogn)
+                # Getting standard normal random variable for i-th layer (epsilon_i)
+                standardNormValue = np.random.standard_normal(1)
 
-            lastNormValue = currentNormValue
+                if index == 0:  # First layer of entire profile, no correlation needed
+                    currentNormValue = standardNormValue
+                    currentVs = np.exp(sigmaLogn*currentNormValue + muLogn)
+                else:
+                    currentNormValue = correlation*lastNormValue + standardNormValue *\
+                                       (1 - correlation**2)**0.5
+                    currentVs = np.exp(sigmaLogn*currentNormValue + muLogn)
+
+                lastNormValue = currentNormValue
             # Appending generated layer in list
             finalLayers.append([layer[1], layer[2], float(currentVs)])
 
-        finalLayers = self.cutOnThreshold(finalLayers)
+        finalLayers, correlationCoeffList = self.cutOnThreshold(finalLayers, correlationCoeffList)
 
         self.makeProfileColumn(finalLayers)
         self.makeCorrelationColumn(correlationCoeffList)
 
-    def cutOnThreshold(self, finalLayers):
+    def cutOnThreshold(self, finalLayers, correlationCoeffList):
         vsValues = [[index, float(current_vs[0]), float(current_vs[2])]
                     for index, current_vs in enumerate(finalLayers)]
         over_threshold = [index for index, _, value in vsValues if value >= self.vsLimit]
 
         if len(over_threshold) == 0:
-            return finalLayers
+            return finalLayers, correlationCoeffList
 
         current_index = over_threshold[0]
         current_remaining = finalLayers[current_index + 1:]
@@ -361,9 +401,9 @@ class StochasticAnalyzer:
             current_remaining.pop(0)
 
         if len(current_remaining) == 0:
-            return finalLayers
+            return finalLayers, correlationCoeffList
         else:
-            return finalLayers[:current_index]
+            return finalLayers[:current_index], correlationCoeffList[:current_index]
 
     def makeProfileColumn(self, finalLayers):
         existingDFSize = len(self._profileDF.columns)
@@ -372,18 +412,24 @@ class StochasticAnalyzer:
         for element in finalLayers:
             currentProfile.append("{};{};{}".format(element[1], element[0], round(element[2], 1)))
 
-        self._profileDF[currentProfileName] = pd.Series(currentProfile)
+        new_column = pd.DataFrame(currentProfile, columns=[currentProfileName])
+        self._profileDF = pd.concat([self._profileDF, new_column], axis=1)
 
     def makeCorrelationColumn(self, correlationCoeffList):
         existingDFSize = len(self._correlationsDF.columns)
         currentProfileName = "P{}".format(existingDFSize + 1)
-        self._correlationsDF[currentProfileName] = pd.Series(correlationCoeffList)
+
+        new_column = pd.DataFrame(correlationCoeffList, columns=[currentProfileName])
+        self._correlationsDF = pd.concat([self._correlationsDF, new_column], axis=1)
+        # self._correlationsDF[currentProfileName] = pd.Series(correlationCoeffList)
 
     @staticmethod
     def getCorrelationVector(currentLayeredProfile, currentLaw, currentLimit=np.nan,
                              var_name_depth='H', var_name_thick='T'):
 
-        if currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
+        if np.isnan(currentLaw):
+            return np.zeros(len(currentLayeredProfile))
+        elif currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
             genericModelName = currentLaw.lower().split('toro:')[1].strip().upper()
 
             # Creating a copy of layered profile with repeated last layer to simulate perfectly
@@ -409,6 +455,13 @@ class StochasticAnalyzer:
 
         return currentCoeff
 
+    def get_current_soils(self):
+        soil_set = set()
+        ordered_unique = [soil for soil in self._rawGroups['Group name']
+                          if soil not in soil_set and soil_set.add(soil) is None]
+
+        return self._allSoils[self._allSoils['Orig name'].isin(ordered_unique)]
+
     def exportExcel(self, filename):
         """
         Export current profiles DataFrame into a new batch input file
@@ -417,15 +470,24 @@ class StochasticAnalyzer:
         :return:
         """
         # Generating soil sheet
-        soilDF = pd.DataFrame(columns=['Soil name', 'Unit weight\n[KN/m3]', 'From\n[m]', 'To\n[m]',
-                                       'Vs\n[m/s]', 'Degradation curve', 'Curve Std'])
-        for index, group in self._rawGroups.iterrows():
-            currentRow = [group['Group name'], group['Unit weight\n[KN/m3]'], "", "", "",
-                          group['Degradation curve\nMean'], group['Degradation curve\nStd']]
-            soilDF.loc[index] = currentRow
+        new_columns = ['Soil name', 'Unit weight\n[KN/m3]', 'From\n[m]', 'To\n[m]',
+                       'Vs\n[m/s]', 'Degradation curve', 'Curve Std']
+        # for index, group in self._rawGroups.iterrows():
+        #     currentRow = [group['Group name'], group['Unit weight\n[KN/m3]'], "", "", "",
+        #                   group['Degradation curve\nMean'], group['Degradation curve\nStd']]
+        #     soilDF.loc[index] = currentRow
+        current_soils = self.get_current_soils()
+        # for index, soil in current_soils.iterrows():
+        #     currentRow = [soil['Group name'], soil['Unit weight\n[KN/m3]'], soil['From\n[m]'],
+        #                   soil['To\n[m]'], str(soil['Vs Law']), soil['Degradation curve\nMean'],
+        #                   soil['Degradation curve\nStd']]
+        soilDF = current_soils[['Group name', 'Unit weight\n[KN/m3]', 'From\n[m]', 'To\n[m]',
+                                'Degradation curve\nMean', 'Degradation curve\nStd']]
+        soilDF.insert(loc=5, column='Vs\n[m]', value="")
+        rename_mapper = {old: new for old, new in zip(soilDF.columns, new_columns)}
 
         with pd.ExcelWriter(filename, mode='w') as writer:
-            soilDF.to_excel(writer, sheet_name='Soils', index=False)
+            soilDF.rename(columns=rename_mapper).to_excel(writer, sheet_name='Soils', index=False)
 
         # Generating profiles, correlations and empty clusters sheets
         with pd.ExcelWriter(filename, mode='a') as writer:
@@ -508,7 +570,7 @@ class ClusterPermutator:
                 if np.isnan(row['From\n[m]']):
                     soil_definition.loc[index, 'From\n[m]'] = 0
                 if np.isnan(row['To \n[m]']):
-                    soil_definition.loc[index, 'To \n[m]'] = 10000
+                    soil_definition.loc[index, 'To \n[m]'] = 1000
 
         soil_names = set(soil_definition['Soil name'])
 
@@ -543,8 +605,8 @@ class ClusterPermutator:
             for profile_package in bricked_permutations_tuple:
                 for profile in profile_package:
                     final_permutations.append(profile)
-        else:
-            final_permutations = bricked_permutations
+        else:  # Extending last layer type until bedrock speed is met
+            final_permutations = self.extendUntilVelocity(bricked_permutations)
 
         complete_profiles = [self.addVs(NCLib.addDepths(profile)) for profile in final_permutations]
         cluster_info_dict = {'Subcluster': current_cluster['Sub-cluster'],
@@ -577,7 +639,9 @@ class ClusterPermutator:
                 profile_list.append("{};{};{}".format(*layer))
             profile_list.insert(0, current_input)
 
-            profileDF[current_name] = pd.Series(profile_list)
+            new_column = pd.DataFrame(profile_list, columns=[current_name])
+            profileDF = pd.concat([profileDF, new_column], axis=1)
+            # profileDF[current_name] = pd.Series(profile_list)
 
         # Generating profiles, correlations and empty clusters sheets
         with pd.ExcelWriter(filename, mode='a') as writer:
@@ -606,7 +670,7 @@ class ClusterPermutator:
 
         return new_profile
 
-    def addVs(self, profile):
+    def addVs(self, profile, max_vs=800):
 
         new_profile = list()
         for depth, thickness, name in profile:
@@ -616,12 +680,11 @@ class ClusterPermutator:
                 current_soil = self.soils[(self.soils['Orig name'] == name) &
                                           (self.soils['From\n[m]'] <= current_centroid) &
                                           (current_centroid <= self.soils['To \n[m]'])]
-                current_vs = current_soil['Vs law'].values[0].subs('H', current_centroid).evalf()
-                new_profile.append([name, thickness, current_vs])
             else:
                 current_soil = self.bedrocks[self.bedrocks['Soil name'] == name]
-                current_vs = current_soil['Vs law'].values[0].subs('H', current_centroid).evalf()
-                new_profile.append([name, thickness, current_vs])
+
+            current_vs = min(max_vs, current_soil['Vs law'].values[0].subs('H', current_centroid).evalf())
+            new_profile.append([name, thickness, current_vs])
 
         return new_profile
 
@@ -641,6 +704,155 @@ class ClusterPermutator:
             profiles_list.append(profile + tuple(bedrock_layers))
 
         return profiles_list
+
+    def extendUntilVelocity(self, profile_list, max_vs=800, max_depth=100):
+
+        profile_list = list(profile_list)
+        new_profile_list = list()
+        for profile in profile_list:
+            current_profile = list(profile)
+            profile_w_depth = NCLib.addDepths(current_profile)
+            profile_vs = self.addVs(profile_w_depth)
+
+            while profile_vs[-1][2] < max_vs and profile_w_depth[-1][0] < max_depth:
+                current_profile.append(profile[-1])
+                profile_w_depth = NCLib.addDepths(current_profile)
+                profile_vs = self.addVs(profile_w_depth)
+            new_profile_list.append(current_profile)
+
+        return new_profile_list
+
+
+class NTCCalculator:
+
+    def __init__(self, csvname):
+        self.NTCDatabase = pd.read_csv(csvname, sep='\t')
+
+    def agNTC(self, lon, lat, tr=475):
+        """
+        Calcola il valore di accelerazione attesa al sito note le coordinate e il tempo di ritorno
+
+        lon: Longitudine del sito
+        lat: Latitudine del sito
+        tr:  Tempo di ritorno dell'azione sismica
+        """
+
+        NTCDatabase = self.NTCDatabase
+        distanceVect = [((lon - float(row['Lon'])) ** 2 + (lat - float(row['Lat'])) ** 2) ** 0.5
+                        for _, row in NTCDatabase.iterrows()]
+        NTCDatabase['Distance'] = distanceVect
+        currentPoints = NTCDatabase.sort_values('Distance').iloc[:4, :]
+
+        close_ag = currentPoints["{}_ag".format(tr)].values
+        close_F0 = currentPoints["{}_F0".format(tr)].values
+        close_Tc = currentPoints["{}_Tc".format(tr)].values
+
+        inv_distance = currentPoints['Distance'].values ** -1
+
+        final_ag = sum(np.multiply(close_ag, inv_distance)) / sum(inv_distance)
+        final_F0 = sum(np.multiply(close_F0, inv_distance)) / sum(inv_distance)
+        final_Tc = sum(np.multiply(close_Tc, inv_distance)) / sum(inv_distance)
+
+        return final_ag / 10, final_F0, final_Tc  # Restituisce l'accelerazione in g, il fattore F0 e il periodo Tc*
+
+    def soilCoefCalc(self, ag, F0, Tcstar, Cat):
+        """
+        Calcola il coefficiente di sottosuolo a partire dalla categoria e dal valore del fattore di amplificazione
+
+        INPUT
+        Cat:    Categoria di sottosuolo (da 'A' a 'E')
+        ag:     Valore dell'accelerazione attesa al sito (in g)
+        F0:     Fattore di amplificazione relativo al sito e al Tr
+        Tcstar: Periodo Tc* di normativa
+
+        OUTPUT
+        Ss:     Coefficiente di sottosuolo 1
+        Cc:     Coefficiente di sottosuolo 2
+        """
+
+        if Cat == 'A':
+            Ss = 1
+            Cc = 1
+        elif Cat == 'B':
+            SsCalc = 1.4 - 0.4 * F0 * ag
+            Ss = min(SsCalc, 1.2)
+            Ss = Ss if Ss > 1 else 1
+
+            Cc = 1.1 * Tcstar ** (-0.2)
+        elif Cat == 'C':
+            SsCalc = 1.7 - 0.6 * F0 * ag
+            Ss = min(SsCalc, 1.5)
+            Ss = Ss if Ss > 1 else 1
+
+            Cc = 1.05 * Tcstar ** (-0.33)
+        elif Cat == 'D':
+            SsCalc = 2.4 - 1.5 * F0 * ag
+            Ss = min(SsCalc, 1.8)
+            Ss = Ss if Ss > 0.9 else 0.9
+
+            Cc = 1.25 * Tcstar ** (-0.5)
+        elif Cat == 'E':
+            SsCalc = 2 - 1.1 * F0 * ag
+            Ss = min(SsCalc, 1.6)
+            Ss = Ss if Ss > 1 else 1
+
+            Cc = 1.15 * Tcstar ** (-0.4)
+        else:
+            Ss = None
+            Cc = None
+        return Ss, Cc
+
+    def computeNTCSpectrum(self, ag, F0, Tcstar, Ss=1, Cc=1, Topog='T1', qq=1, passo=0.01):
+        """
+        Calcola lo spettro di risposta di normativa secondo NTC2008
+
+        INPUT
+        ag:     Accelerazione di picco attesa al sito per categoria A
+        F0:     Fattore di amplificazione
+        Tcstar: Valore del periodo Tc*
+        Ss:     Coefficiente di sottosuolo
+        Cc:     Coefficiente di sottosuolo 2
+        Topog:  Categoria topografica (da T1 a T4)
+        qq:     Fattore di struttura
+        passo:  Passo dei periodi per il calcolo dello spettro di risposta
+        asseGrafico:    Se specificato, plotta lo spettro nell'asse desiderato
+
+        OUTPUT
+        TT:     Vettore dei periodi in cui è stato calcolato lo spettro
+        RS:     Valori di pseudoaccelerazione calcolati
+        """
+
+        # Calcolo del coefficiente di categoria topografica
+        if Topog.upper() == 'T4':
+            St = 1.4
+        elif Topog.upper() == 'T2' or Topog.upper() == 'T3':
+            St = 1.2
+        else:  # Categoria topografica T1
+            St = 1
+
+        S = Ss * St
+
+        # Calcolo dello spettro di risposta
+        Tc = Cc * Tcstar
+        Tb = Tc / 3
+        Td = 4 * ag + 1.6
+        eta = 1 / qq
+
+        TT = np.arange(0, 4 + passo, passo)
+        RS = list()
+
+        for periodo in TT:
+
+            if periodo < Tb:
+                RS.append(ag * S * eta * F0 * (periodo / Tb + 1 / (eta * F0) * (1 - periodo / Tb)))
+            elif periodo < Tc:
+                RS.append(ag * S * eta * F0)
+            elif periodo < Td:
+                RS.append(ag * S * eta * F0 * (Tc / periodo))
+            else:
+                RS.append(ag * S * eta * F0 * (Tc * Td / periodo ** 2))
+
+        return np.vstack((TT, RS)).transpose()
 
 # class SoilPropertyVariatorOLD:
 #     """

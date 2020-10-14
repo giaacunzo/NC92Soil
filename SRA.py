@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator, NTCCalculator
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -90,6 +90,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.pushButton_loadBatch.clicked.connect(self.loadBatch)
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
+        self.actionGenerate_NTC.triggered.connect(self.generateNTC)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -854,6 +855,48 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                 for elemIndex, element in enumerate(row):
                     self.tableWidget_Profile.setItem(rowIndex, elemIndex + 1, QTableWidgetItem(str(element)))
+
+    def generateNTC(self):
+        coordinate_file = QFileDialog.getOpenFileName(self, caption='Choose the input file with site coordinates"',
+                                                      filter='Excel Files (*.xlsx)')[0]
+
+        if len(coordinate_file) == 0:
+            return None
+
+        period_list = ['30', '50', '72', '101', '140', '201', '475', '975', '2475']
+        selection, ok = QInputDialog.getItem(self, "Choose the return period",
+                                        "Tr", period_list, 0, False)
+
+        if ok:
+            tr = str(selection)
+        else:
+            return None
+
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        if outputFolder == '':
+            return None
+
+        mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic').dropna(axis=0, subset=['Lon']).\
+            drop_duplicates(subset='ID CODE').reset_index()
+        A = NTCCalculator('NTC2008.csv')
+
+        number_rows = len(mops_coord)
+        waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
+                                  format(number_rows, tr), "Cancel", 0, number_rows - 1)
+        waitBar.setWindowTitle('NC92-Soil permutator')
+        waitBar.setValue(0)
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        for index, row in mops_coord.iterrows():
+            waitBar.setLabelText('Spectrum for {} ({} of {})'.format(row['ID CODE'], index + 1, number_rows))
+            ag, F0, Tc = A.agNTC(row['Lon'], row['Lat'], tr=tr)
+            current_spectrum = A.computeNTCSpectrum(ag, F0, Tc)
+            current_file = os.path.join(outputFolder, "{}.txt".format(row['ID CODE']))
+            np.savetxt(fname=current_file, X=current_spectrum, fmt='%f\t%f')
+            waitBar.setValue(index)
+            App.processEvents()
 
 
 if __name__ == "__main__":

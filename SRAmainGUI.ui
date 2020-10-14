@@ -1396,6 +1396,7 @@
     <addaction name="actionGenerateStochastic"/>
     <addaction name="separator"/>
     <addaction name="actionGeneratePermutated"/>
+    <addaction name="actionGenerate_NTC"/>
    </widget>
    <addaction name="menuTools"/>
    <addaction name="menu"/>
@@ -1413,6 +1414,11 @@
   <action name="actionGeneratePermutated">
    <property name="text">
     <string>Generate permutated input (beta)</string>
+   </property>
+  </action>
+  <action name="actionGenerate_NTC">
+   <property name="text">
+    <string>Generate NTC spectra</string>
    </property>
   </action>
  </widget>
