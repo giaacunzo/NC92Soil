@@ -4,7 +4,6 @@ import pandas as pd
 import sympy
 import SRALibrary as NCLib
 import os
-import csv
 
 
 class BriefReportOutput(pysra.output.Output):
@@ -206,9 +205,10 @@ class StochasticAnalyzer:
         self.numberIterations = int(currentStochastic['Number of iterations'][0])
         self.correlationMode = currentStochastic['Correlation mode'][0]
         self.vsLimit = currentStochastic['Bedrock Vs\n[m/s]'][0]
+        self.inputFiles = currentStochastic['Input files'][0]
 
         # Check of random seed
-        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'], float):
+        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0], float):
             self.randomSeed = None
         else:
             self.randomSeed = int(currentStochastic['Random seed'][0])
@@ -227,6 +227,8 @@ class StochasticAnalyzer:
         self._rawGroups = pd.DataFrame()
         self._profileDF = pd.DataFrame()
         self._correlationsDF = pd.DataFrame()
+
+        np.random.seed(self.randomSeed)
 
     @staticmethod
     def makeSoils(soil_sheet):
@@ -279,7 +281,7 @@ class StochasticAnalyzer:
         self._rawGroups = self._allData[self._allData['ID CODE'] == id_code]
         self._rawGroups.reset_index(inplace=True)
 
-    def parseLaw(self, group_name, depth):
+    def parseLaw(self, group_name, depth, current_law=None):
         """
 
         :param group_name: name of current soil
@@ -288,22 +290,31 @@ class StochasticAnalyzer:
         :return: the value of the mean Vs for normal distribution
         """
         current_def = self._allSoils[(self._allSoils['Orig name'] == group_name) &
-                                      (self._allSoils['From\n[m]'] <= depth) &
-                                      (depth < self._allSoils['To\n[m]'])]
+                                     (self._allSoils['From\n[m]'] <= depth) &
+                                     (depth < self._allSoils['To\n[m]'])]
         current_soil = current_def['Group name'].values[0]
-        currentVsLaw = current_def['Vs Law'].values[0]
-        current_sigma = current_def['Sigma logn'].values[0]
+        if not current_law:
+            currentVsLaw = current_def['Vs Law'].values[0]
+            current_sigma = current_def['Sigma logn'].values[0]
+            currentMean = currentVsLaw.subs('H', depth).evalf()
+        else:  # A new law string is given
+            currentMean = sympy.sympify(current_law).subs('H', depth)
+            current_sigma = np.nan
 
-        return current_soil, currentVsLaw.subs('H', depth).evalf(), current_sigma
+        return current_soil, currentMean, current_sigma
 
     def parseCorrelation(self, group_name):
         return self._allSoils[self._allSoils['Group name'] == group_name]['Inter-layer correlation'].values[0], \
                self._allSoils[self._allSoils['Group name'] == group_name]['Maximum depth\n[m]'].values[0]
 
-    def generateRndProfile(self):
-        np.random.seed(self.randomSeed)
+    @staticmethod
+    def randomGroup(groupNames, separator):
+        random_index = np.random.randint(0, len(groupNames.split(separator)))
+        return random_index, groupNames.split(separator)[random_index]
 
+    def generateRndProfile(self):
         # Creating basic layered profile as [centroid, thickness, name]
+        separator = ','
         currentDepth = 0
         layeredProfile = []
         layeredSplitted = []
@@ -317,12 +328,28 @@ class StochasticAnalyzer:
                 groupThickness = np.random.randint(group['Min thickness\n[m]'], group['Max thickness\n[m]'] + 1)
                 totalDepth += groupThickness
 
+            if separator in groupName:
+                groupName = self.randomGroup(groupName, separator)
+
             for counter in range(groupThickness):
                 currentCentroid = currentDepth + 1/2
                 currentDepth += 1
 
                 # Evaluating mean Vs value from the given relation
-                soil_name, meanVsValue, stdVsValue = self.parseLaw(groupName, currentCentroid)
+                if isinstance(groupName, tuple):
+                    currentLaw = [law.strip() for law in group['Vs Law'].split(separator)][groupName[0]]
+                    group_name = groupName[1]
+                    if currentLaw == "-1":
+                        currentLaw = None
+                elif isinstance(group['Vs Law'], str):
+                    currentLaw = (group['Vs Law'], group['Sigma logn'])
+                    group_name = groupName
+                else:
+                    currentLaw = None
+                    group_name = groupName
+
+                # RIPARTIRE DA QUI
+                soil_name, meanVsValue, stdVsValue = self.parseLaw(group_name, currentCentroid, currentLaw)
                 currentLayeredProfile.append([currentCentroid, 1, soil_name, meanVsValue, stdVsValue])
 
             layeredProfile.extend(currentLayeredProfile)  # Extending final profile list
@@ -408,7 +435,10 @@ class StochasticAnalyzer:
     def makeProfileColumn(self, finalLayers):
         existingDFSize = len(self._profileDF.columns)
         currentProfileName = "P{}".format(existingDFSize + 1)
-        currentProfile = [" "]
+        if self.inputFiles == 'Assign by ID':
+            currentProfile = ["{}.txt".format(self._rawGroups['ID CODE'][0])]
+        else:
+            currentProfile = [" "]
         for element in finalLayers:
             currentProfile.append("{};{};{}".format(element[1], element[0], round(element[2], 1)))
 
@@ -427,7 +457,7 @@ class StochasticAnalyzer:
     def getCorrelationVector(currentLayeredProfile, currentLaw, currentLimit=np.nan,
                              var_name_depth='H', var_name_thick='T'):
 
-        if np.isnan(currentLaw):
+        if not isinstance(currentLaw, str) and np.isnan(currentLaw):
             return np.zeros(len(currentLayeredProfile))
         elif currentLaw.lower().startswith('toro:'):  # Using Toro correlation model
             genericModelName = currentLaw.lower().split('toro:')[1].strip().upper()
@@ -483,7 +513,7 @@ class StochasticAnalyzer:
         #                   soil['Degradation curve\nStd']]
         soilDF = current_soils[['Group name', 'Unit weight\n[KN/m3]', 'From\n[m]', 'To\n[m]',
                                 'Degradation curve\nMean', 'Degradation curve\nStd']]
-        soilDF.insert(loc=5, column='Vs\n[m]', value="")
+        soilDF.insert(loc=4, column='Vs\n[m]', value="")
         rename_mapper = {old: new for old, new in zip(soilDF.columns, new_columns)}
 
         with pd.ExcelWriter(filename, mode='w') as writer:
@@ -713,18 +743,22 @@ class ClusterPermutator:
             current_profile = list(profile)
             profile_w_depth = NCLib.addDepths(current_profile)
             profile_vs = self.addVs(profile_w_depth)
+            base_depth = profile_w_depth[-1][0] + profile_w_depth[-1][1]
 
-            while profile_vs[-1][2] < max_vs and profile_w_depth[-1][0] < max_depth:
+            while profile_vs[-1][2] < max_vs and base_depth < max_depth:
                 current_profile.append(profile[-1])
                 profile_w_depth = NCLib.addDepths(current_profile)
                 profile_vs = self.addVs(profile_w_depth)
+                base_depth = profile_w_depth[-1][0] + profile_w_depth[-1][1]
             new_profile_list.append(current_profile)
 
         return new_profile_list
 
 
 class NTCCalculator:
-
+    """
+    Class for handling NTC spectra generation
+    """
     def __init__(self, csvname):
         self.NTCDatabase = pd.read_csv(csvname, sep='\t')
 
@@ -755,7 +789,8 @@ class NTCCalculator:
 
         return final_ag / 10, final_F0, final_Tc  # Restituisce l'accelerazione in g, il fattore F0 e il periodo Tc*
 
-    def soilCoefCalc(self, ag, F0, Tcstar, Cat):
+    @staticmethod
+    def soilCoefCalc(ag, F0, Tcstar, Cat):
         """
         Calcola il coefficiente di sottosuolo a partire dalla categoria e dal valore del fattore di amplificazione
 
@@ -802,7 +837,8 @@ class NTCCalculator:
             Cc = None
         return Ss, Cc
 
-    def computeNTCSpectrum(self, ag, F0, Tcstar, Ss=1, Cc=1, Topog='T1', qq=1, passo=0.01):
+    @staticmethod
+    def computeNTCSpectrum(ag, F0, Tcstar, Ss=1, Cc=1, Topog='T1', qq=1, passo=0.01):
         """
         Calcola lo spettro di risposta di normativa secondo NTC2008
 
@@ -838,7 +874,11 @@ class NTCCalculator:
         Td = 4 * ag + 1.6
         eta = 1 / qq
 
-        TT = np.arange(0, 4 + passo, passo)
+        # TT = np.arange(0, 4 + passo, passo)
+        TTlog = np.logspace(-1, np.log10(4), 91, endpoint=True)
+        TTlin = np.arange(0, 0.1, passo)
+
+        TT = np.hstack([TTlin, TTlog])
         RS = list()
 
         for periodo in TT:
@@ -853,50 +893,3 @@ class NTCCalculator:
                 RS.append(ag * S * eta * F0 * (Tc * Td / periodo ** 2))
 
         return np.vstack((TT, RS)).transpose()
-
-# class SoilPropertyVariatorOLD:
-#     """
-#     Class for handling randomly variated soil property curves
-#     """
-#     def __init__(self, meanCurves, curveStds, GLimits=(0.05, 1), DLimits=(0.001, 0.25),
-#                  truncation=2, correlation=-0.5):
-#         self._GLimits = GLimits
-#         self._DLimits = DLimits
-#         self._meanCurves = meanCurves
-#         self._curveStds = curveStds
-#         self.randGenerator = pysra.variation.TruncatedNorm(truncation)
-#         self._correlation = correlation
-#
-#     def getGenericVariated(self):
-#         """
-#         Generates a variated curve given mean value and std deviation
-#         :return: nx3 array with the generated curve
-#         """
-#         # Generates a pair of correlated random variables
-#         randomVars = self.randGenerator.correlated(self._correlation)
-#
-#         # Computing variated G curve
-#         GVariated = list()
-#         for value in self._meanCurves[:, 1]:
-#             currentValue = value + randomVars[0] * self._curveStds[0]
-#             if currentValue < self._GLimits[0]:
-#                 currentValue = self._GLimits[0]
-#             elif currentValue > self._GLimits[1]:
-#                 currentValue = self._GLimits[1]
-#             GVariated.append(currentValue)
-#
-#         GVariated = np.array(GVariated)
-#
-#         # Computing variated D curve
-#         DVariated = list()
-#         for value in self._meanCurves[:, 2]:
-#             currentValue = value + randomVars[1] * self._curveStds[1]
-#             if currentValue < self._DLimits[0]:
-#                 currentValue = self._DLimits[0]
-#             elif currentValue > self._DLimits[1]:
-#                 currentValue = self._DLimits[1]
-#             DVariated.append(currentValue)
-#
-#         DVariated = np.array(DVariated)
-#
-#         return np.stack([self._meanCurves[:, 0], GVariated, DVariated], axis=1)

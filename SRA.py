@@ -20,7 +20,7 @@ from pygame import mixer, error as pygameexception
 def aboutMessage():
     mixer.init()
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.8 beta\n"
+    Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil")
     try:
@@ -319,7 +319,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.checkBox_outBrief.setEnabled(False)
 
     def loadTH(self):
-        timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
+        timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
+                                                        filter='Text files (*.txt)')[0]
         if len(timeHistoryFiles) == 0:
             return None
 
@@ -338,7 +339,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_eventList.setEnabled(True)
 
     def loadSpectra(self):
-        spectraFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"')[0]
+        spectraFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
+                                                    filter='Text files (*.txt)')[0]
         if len(spectraFiles) == 0:
             return None
         currentUnits = self.comboBox_SpectraUnits.currentText()
@@ -360,8 +362,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(QMessageBox(), "Check damping", msg)
             return None
 
+        waitBar = QProgressDialog("Importing {} files..".
+                                  format(len(spectraFiles)), "Cancel", 0, len(spectraFiles))
+        waitBar.show()
+        App.processEvents()
+
         inputMotionDict = SRALib.loadSpectra(spectraFiles, float(self.lineEdit_damping.text()),
-                                             float(self.lineEdit_duration.text()), currentUnits)
+                                             float(self.lineEdit_duration.text()), currentUnits, waitBar, App)
         self.inputMotion = inputMotionDict
         self.comboBox_spectraList.clear()
         self.comboBox_spectraList.addItems(inputMotionDict.keys())
@@ -864,8 +871,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             return None
 
         period_list = ['30', '50', '72', '101', '140', '201', '475', '975', '2475']
-        selection, ok = QInputDialog.getItem(self, "Choose the return period",
-                                        "Tr", period_list, 0, False)
+        selection, ok = QInputDialog.getItem(self, "Tr",
+                                             "Choose the return period", period_list, 0, False)
 
         if ok:
             tr = str(selection)
@@ -882,7 +889,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
-                                  format(number_rows, tr), "Cancel", 0, number_rows - 1)
+                                  format(number_rows, tr), "Cancel", 0, number_rows)
         waitBar.setWindowTitle('NC92-Soil permutator')
         waitBar.setValue(0)
         waitBar.setMinimumDuration(0)
@@ -891,13 +898,15 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         for index, row in mops_coord.iterrows():
             waitBar.setLabelText('Spectrum for {} ({} of {})'.format(row['ID CODE'], index + 1, number_rows))
+            App.processEvents()
             ag, F0, Tc = A.agNTC(row['Lon'], row['Lat'], tr=tr)
             current_spectrum = A.computeNTCSpectrum(ag, F0, Tc)
             current_file = os.path.join(outputFolder, "{}.txt".format(row['ID CODE']))
             np.savetxt(fname=current_file, X=current_spectrum, fmt='%f\t%f')
-            waitBar.setValue(index)
+            waitBar.setValue(index + 1)
             App.processEvents()
 
+        QMessageBox.information(QMessageBox(), 'OK', 'NTC spectra have been correctly saved')
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)

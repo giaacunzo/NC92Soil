@@ -132,11 +132,16 @@ def loadTH(fileNames, Fs, Units):
     return THDict
 
 
-def loadSpectra(fileNames, Damping, Duration, Units):
+def loadSpectra(fileNames, Damping, Duration, Units, waitBar=None, gui=None):
     conversionFactorList = {'cm/s^2': 1 / 980.665, 'm/s^2': 1 / 9.80665, 'g': 1}
     SpectraDict = dict()
+    number_inputs = len(fileNames)
 
-    for filename in fileNames:
+    for index, filename in enumerate(fileNames):
+        if waitBar:
+            waitBar.setLabelText('Importing spectrum {} of {}..'.format(index + 1, number_inputs))
+            gui.processEvents()
+
         with open(filename) as spectrumFile:
             Contenuto = spectrumFile.read().splitlines()
 
@@ -181,6 +186,11 @@ def loadSpectra(fileNames, Damping, Duration, Units):
         inputMotion._freqs = inputMotion.freqs[toTake]
 
         SpectraDict[onlyName] = [inputMotion, origSpectrum, eventID, Damping, measureUnits]
+
+        if waitBar:
+            waitBar.setValue(index + 1)
+            gui.processEvents()
+
     return SpectraDict
 
 
