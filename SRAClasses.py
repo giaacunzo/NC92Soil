@@ -297,9 +297,12 @@ class StochasticAnalyzer:
             currentVsLaw = current_def['Vs Law'].values[0]
             current_sigma = current_def['Sigma logn'].values[0]
             currentMean = currentVsLaw.subs('H', depth).evalf()
-        else:  # A new law string is given
-            currentMean = sympy.sympify(current_law).subs('H', depth)
-            current_sigma = np.nan
+        else:  # A new law tuple is given (law, std)
+            currentMean = sympy.sympify(current_law[0]).subs('H', depth)
+            if isinstance(current_law[1], (float, int)) and np.isnan(current_law[1]):
+                current_sigma = current_def['Sigma logn'].values[0]
+            else:
+                current_sigma = current_law[1]
 
         return current_soil, currentMean, current_sigma
 
@@ -336,19 +339,24 @@ class StochasticAnalyzer:
                 currentDepth += 1
 
                 # Evaluating mean Vs value from the given relation
-                if isinstance(groupName, tuple):
-                    currentLaw = [law.strip() for law in group['Vs Law'].split(separator)][groupName[0]]
+                if isinstance(groupName, tuple):  # Randomly chosen GT group, associating corresponding law
+                    lawValue = [law.strip() for law in group['Vs Law'].split(separator)][groupName[0]]
                     group_name = groupName[1]
-                    if currentLaw == "-1":
+                    if lawValue == "-1":  # Using Vs law and Sigma logn from main soil sheet
                         currentLaw = None
-                elif isinstance(group['Vs Law'], str):
+                    else:  # Using current Vs law and Sigma logn
+                        currentLaw = (lawValue, group['Sigma logn'])
+                elif isinstance(group['Vs Law'], (float, int)) and not np.isnan(group['Vs Law'])\
+                        and group['Vs Law'] != -1:  # A numeric value for Vs mean is specified
+                    currentLaw = (str(group['Vs Law']), group['Sigma logn'])
+                    group_name = groupName
+                elif isinstance(group['Vs Law'], str):  # A custom law for Vs mean is specified
                     currentLaw = (group['Vs Law'], group['Sigma logn'])
                     group_name = groupName
-                else:
+                else:  # No law specified, using main soil sheet values
                     currentLaw = None
                     group_name = groupName
 
-                # RIPARTIRE DA QUI
                 soil_name, meanVsValue, stdVsValue = self.parseLaw(group_name, currentCentroid, currentLaw)
                 currentLayeredProfile.append([currentCentroid, 1, soil_name, meanVsValue, stdVsValue])
 
@@ -487,7 +495,13 @@ class StochasticAnalyzer:
 
     def get_current_soils(self):
         soil_set = set()
-        ordered_unique = [soil for soil in self._rawGroups['Group name']
+        # Expanding soil alternatives
+        splitted_soils = [soil.split(',') for soil in self._rawGroups['Group name']]
+        extended_soils = list()
+        for splitted in splitted_soils:
+            extended_soils.extend(splitted)
+
+        ordered_unique = [soil for soil in extended_soils
                           if soil not in soil_set and soil_set.add(soil) is None]
 
         return self._allSoils[self._allSoils['Orig name'].isin(ordered_unique)]
@@ -645,16 +659,40 @@ class ClusterPermutator:
 
         self.writeProfile(complete_profiles, cluster_info_dict)
 
+    def makeFinalSoilSheet(self):
+        # Creating soil sheet
+        soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
+        soil_sheet['Curve Std'] = ""
+        soil_sheet['Vs\n[m/s]'] = ""
+
+        # Adding bedrock definitions
+        bedrock_sheet = self.bedrocks.drop(columns=['index']).rename(columns={'Vs law': 'Vs\n[m/s]'})
+        bedrock_sheet.insert(2, 'From\n[m]', 0)
+        bedrock_sheet.insert(3, 'To \n[m]', 1000)
+        bedrock_sheet['Vs\n[m/s]'] = ""
+        bedrock_sheet['Curve Std'] = ""
+
+        return pd.concat([soil_sheet, bedrock_sheet])
+
     def writeProfile(self, complete_profiles, cluster_info_dict):
         onlyname = "{}-{}.xlsx".format(cluster_info_dict['Cluster name'],
                                        cluster_info_dict['Subcluster'])
         filename = os.path.join(self._output_folder, onlyname)
 
-        # Creating soil sheet
-        soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
-        soil_sheet['Curve Std'] = ""
-        soil_sheet['Vs\n[m/s]'] = ""
-        soil_sheet.to_excel(filename, index=False, sheet_name='Soils')
+        # # Creating soil sheet
+        # soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
+        # soil_sheet['Curve Std'] = ""
+        # soil_sheet['Vs\n[m/s]'] = ""
+        #
+        # # Adding bedrock definitions
+        # bedrock_sheet = self.bedrocks.drop(columns=['index']).rename(columns={'Vs law': 'Vs\n[m/s]'})
+        # bedrock_sheet.insert(2, 'From\n[m]', 0)
+        # bedrock_sheet.insert(3, 'To \n[m]', 1000)
+        # bedrock_sheet['Vs\n[m/s]'] = ""
+        # bedrock_sheet['Curve Std'] = ""
+        #
+        # pd.concat([soil_sheet, bedrock_sheet]).to_excel(filename, index=False, sheet_name='Soils')
+        self.makeFinalSoilSheet().to_excel(filename, index=False, sheet_name='Soils')
 
         # Creating profile sheet
         profileDF = pd.DataFrame()
@@ -714,7 +752,7 @@ class ClusterPermutator:
                 current_soil = self.bedrocks[self.bedrocks['Soil name'] == name]
 
             current_vs = min(max_vs, current_soil['Vs law'].values[0].subs('H', current_centroid).evalf())
-            new_profile.append([name, thickness, current_vs])
+            new_profile.append([current_soil['Soil name'].values[0], thickness, current_vs])
 
         return new_profile
 
@@ -753,6 +791,89 @@ class ClusterPermutator:
             new_profile_list.append(current_profile)
 
         return new_profile_list
+
+
+class ClusterToMOPS(ClusterPermutator):
+
+    def __init__(self, filename, output_folder):
+        super().__init__(filename, output_folder)
+
+    def addBedrock(self, profile, brick_size=3, max_depth=100, max_vs=800):
+        profiles_list = list()
+        for _, bedrock in self.bedrocks.iterrows():
+            current_profile = list(profile)
+            current_profile.append((brick_size, bedrock['Soil name']))
+            profiles_list.append(current_profile)
+        return profiles_list
+
+    def makeClusterProfiles(self, row_index):
+        current_cluster = self._rawClusters.iloc[row_index]
+        current_input = current_cluster['Input files']
+
+        brickedProfile = self.makeBricks(current_cluster)
+        bricked_permutations = NCLib.calcPermutations(brickedProfile, True)
+
+        if current_cluster['Add geological bedrock'] == 'Y':
+            bricked_permutations_tuple = [self.addBedrock(profile) for profile in bricked_permutations]
+            final_permutations = list()
+            for profile_package in bricked_permutations_tuple:
+                for profile in profile_package:
+                    final_permutations.append(profile)
+        else:
+            final_permutations = bricked_permutations
+
+        cluster_info_dict = {'Subcluster': current_cluster['Sub-cluster'],
+                             'Cluster name': current_cluster['Cluster'],
+                             'Input list': current_input}
+
+        self.writeProfile(final_permutations, cluster_info_dict)
+
+    def writeProfile(self, complete_profile, cluster_info_dict):
+        onlyname = "{}-{}.xlsx".format(cluster_info_dict['Cluster name'],
+                                       cluster_info_dict['Subcluster'])
+        filename = os.path.join(self._output_folder, onlyname)
+
+        merged_soilSheet = self.makeFinalSoilSheet()
+        merged_soilSheet.to_excel(filename, index=False, sheet_name='Group definitions')
+
+        # Creating the Stochastic sheet
+
+        stochastic_sheet = pd.DataFrame(columns=['ID CODE', 'Lat', 'Lon', 'Group name', 'Min thickness\n[m]',
+                                                 'Max thickness\n[m]', 'Vs Law', 'Sigma logn', ' ', '  ',
+                                                 'Number of iterations', 'Input files', 'Random seed',
+                                                 'Correlation mode', 'Bedrock Vs\n[m/s]'])
+        for perm_index, permutation in enumerate(complete_profile):
+            current_ID = "{}-{}-P{}".format(cluster_info_dict['Cluster name'], cluster_info_dict['Subcluster'],
+                                            perm_index + 1)
+
+            for soil_index, soil_data in enumerate(permutation):
+                currentRow = pd.Series(index=stochastic_sheet.columns)
+
+                if perm_index == 0 and soil_index == 0:
+                    currentRow['Number of iterations'] = 100
+                    currentRow['Input files'] = self._rawClusters['Input files'][0]
+                    currentRow['Correlation mode'] = 'All profile'
+                    currentRow['Bedrock Vs\n[m/s]'] = 800
+                currentRow['ID CODE'] = current_ID
+                currentRow['Group name'] = soil_data[1]
+                currentRow['Min thickness\n[m]'] = soil_data[0]
+                currentRow['Max thickness\n[m]'] = soil_data[0]
+
+                stochastic_sheet = stochastic_sheet.append(currentRow, ignore_index=True)
+
+        with pd.ExcelWriter(filename, mode='a') as writer:
+            stochastic_sheet.to_excel(writer, index=False, sheet_name='Stochastic')
+
+    def makeFinalSoilSheet(self):
+        # Creating soil sheet
+        soil_sheet = self._rawSoils.rename(columns={'Vs law': 'Vs Law', 'Soil name': 'Group name',
+                                                    'To \n[m]': 'To\n[m]'})
+
+        # Adding bedrock definitions
+        bedrock_sheet = self._rawBedrocks.rename(columns={'Vs law': 'Vs Law', 'Soil name': 'Group name',
+                                                          'To \n[m]': 'To\n[m]'})
+
+        return pd.concat([soil_sheet, bedrock_sheet])
 
 
 class NTCCalculator:

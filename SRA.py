@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator, NTCCalculator
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator, NTCCalculator, ClusterToMOPS
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -631,7 +631,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if outputFolder == "":
             return None
 
-        loadClustersObj = ClusterPermutator(inputFile[0], outputFolder)
+        # loadClustersObj = ClusterPermutator(inputFile[0], outputFolder)
+        loadClustersObj = ClusterToMOPS(inputFile[0], outputFolder)
 
         waitBar = QProgressDialog("Exporting batch files..", "Cancel", 0,
                                   loadClustersObj.number_clusters)
