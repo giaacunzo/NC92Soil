@@ -631,8 +631,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if outputFolder == "":
             return None
 
+        iterations, ok_pressed = QInputDialog.getInt(None, "Iterations", "Choose the number of iterations", 100)
+
+        if not ok_pressed:
+            return None
+
         # loadClustersObj = ClusterPermutator(inputFile[0], outputFolder)
-        loadClustersObj = ClusterToMOPS(inputFile[0], outputFolder)
+        loadClustersObj = ClusterToMOPS(inputFile[0], outputFolder, iterations)
 
         waitBar = QProgressDialog("Exporting batch files..", "Cancel", 0,
                                   loadClustersObj.number_clusters)

@@ -404,7 +404,7 @@ class StochasticAnalyzer:
                 else:
                     currentNormValue = correlation*lastNormValue + standardNormValue *\
                                        (1 - correlation**2)**0.5
-                    currentVs = np.exp(sigmaLogn*currentNormValue + muLogn)
+                    currentVs = np.exp(float(sigmaLogn*currentNormValue + muLogn))
 
                 lastNormValue = currentNormValue
             # Appending generated layer in list
@@ -480,9 +480,9 @@ class StochasticAnalyzer:
 
         else:  # Custom equation specified
             currentCoeff = []
-            symbolicParse = sympy.sympify(currentLaw)
+            symbolicParse = sympy.sympify(currentLaw.replace('EXP', 'exp'))
             for layer in currentLayeredProfile[1:]:
-                if np.isnan(currentLimit):  # No limit depth for correlation specified
+                if np.isnan(currentLimit) or layer[0] < currentLimit:  # Computing value for current depth
                     currentValue = symbolicParse.subs(var_name_depth, layer[0]).subs(var_name_thick, layer[1])
                 else:
                     currentValue = symbolicParse.subs(var_name_depth, currentLimit).subs(var_name_thick, layer[1])
@@ -795,14 +795,16 @@ class ClusterPermutator:
 
 class ClusterToMOPS(ClusterPermutator):
 
-    def __init__(self, filename, output_folder):
+    def __init__(self, filename, output_folder, iterations=100):
         super().__init__(filename, output_folder)
+        self.iterations = iterations
 
     def addBedrock(self, profile, brick_size=3, max_depth=100, max_vs=800):
         profiles_list = list()
-        for _, bedrock in self.bedrocks.iterrows():
+        unique_soil_names = set(self.bedrocks['Soil name'])
+        for bedrock in unique_soil_names:
             current_profile = list(profile)
-            current_profile.append((brick_size, bedrock['Soil name']))
+            current_profile.append((brick_size, bedrock))
             profiles_list.append(current_profile)
         return profiles_list
 
@@ -843,14 +845,14 @@ class ClusterToMOPS(ClusterPermutator):
                                                  'Number of iterations', 'Input files', 'Random seed',
                                                  'Correlation mode', 'Bedrock Vs\n[m/s]'])
         for perm_index, permutation in enumerate(complete_profile):
-            current_ID = "{}-{}-P{}".format(cluster_info_dict['Cluster name'], cluster_info_dict['Subcluster'],
-                                            perm_index + 1)
+            current_ID = "{}-{}-Perm{}".format(cluster_info_dict['Cluster name'], cluster_info_dict['Subcluster'],
+                                               perm_index + 1)
 
             for soil_index, soil_data in enumerate(permutation):
                 currentRow = pd.Series(index=stochastic_sheet.columns)
 
                 if perm_index == 0 and soil_index == 0:
-                    currentRow['Number of iterations'] = 100
+                    currentRow['Number of iterations'] = self.iterations
                     currentRow['Input files'] = self._rawClusters['Input files'][0]
                     currentRow['Correlation mode'] = 'All profile'
                     currentRow['Bedrock Vs\n[m/s]'] = 800
