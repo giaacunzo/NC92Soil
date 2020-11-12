@@ -795,7 +795,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                       for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
                                       if inputName.strip() != ""]
 
-                    if len(currentMotions) == 0:  # No input specified, all the imported input will be used
+                    if len(currentMotions) == 0 or currentMotions[0].upper() == 'ALL':
+                        # No input specified, all the imported input will be used
                         currentMotions = list(self.inputMotion.keys())
 
                     # If VS is specified only one analysis is performed

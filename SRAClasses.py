@@ -446,7 +446,7 @@ class StochasticAnalyzer:
         if self.inputFiles == 'Assign by ID':
             currentProfile = ["{}.txt".format(self._rawGroups['ID CODE'][0])]
         else:
-            currentProfile = [" "]
+            currentProfile = ["ALL"]
         for element in finalLayers:
             currentProfile.append("{};{};{}".format(element[1], element[0], round(element[2], 1)))
 
