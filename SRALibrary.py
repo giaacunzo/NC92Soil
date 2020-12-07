@@ -479,6 +479,99 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
     return finalOutput
 
 
+def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
+    subfolder_list = [element.path for element in os.scandir(analysis_path) if element.is_dir()]
+    subfolder_num = len(subfolder_list)
+
+    if waitBar:
+        waitBar.setMaximum(subfolder_num)
+
+    new_df = pd.DataFrame()
+    master_df = pd.DataFrame()
+    for index, subfolder in enumerate(subfolder_list):
+        current_ID = os.path.relpath(subfolder, analysis_path).lstrip('Profiles - ')
+        if waitBar:
+            waitBar.setLabelText("Merging {} ({} of {})".format(current_ID, index + 1, subfolder_num))
+            App.processEvents()
+        # Scanning with os.walk()
+        for root, _, filenames in os.walk(subfolder):
+            for name in filenames:
+                if name == 'BriefReportOutput.xlsx':
+                    currentBriefReportName = os.path.join(root, 'BriefReportOutput.xlsx')
+                    sheet_names = pd.ExcelFile(currentBriefReportName).sheet_names
+
+                    for sheet in sheet_names:
+                        currentBriefReport = pd.read_excel(currentBriefReportName, sheet_name=sheet)
+                        currentBriefReport.insert(1, 'Event', sheet)
+                        currentBriefReport.rename(columns={'Unnamed: 0': 'Analysis ID'}, inplace=True)
+                        currentIDName = os.path.relpath(root, analysis_path).replace('\\', '-').lstrip('Profiles - ')
+                        currentBriefReport['Analysis ID'] = currentIDName
+
+                        if new_df.empty:
+                            new_df = currentBriefReport
+                        else:
+                            new_df = new_df.append(currentBriefReport)
+        # Adding stats for current MOPS
+        # stats_row = pd.DataFrame(columns=['Analysis ID', 'Event', 'PGA ref [g]', 'PGV ref [cm/s]',
+        #                                   'ln(H) mean [m]', 'ln(VsH) mean [m/s]', 'Shallow soil name',
+        #                                   'ln(Vs30) mean [m/s]', 'ln(AF) [0.1 - 0.5s] mean',
+        #                                   'ln(AF) [0.4 - 0.8s] mean', 'ln(AF) [0.7 - 1.1s] mean'])
+
+        def get_log_stats(df, colonna):
+            try:
+                if colonna.startswith('PG') or colonna.startswith('H'):
+                    return np.mean(df[colonna]), np.std(df[colonna])
+                else:
+                    return np.mean(np.log(df[colonna])), np.std(np.log(df[colonna]))
+            except TypeError:
+                return df[colonna].values[0]
+
+        stats_row = pd.DataFrame(columns=new_df.columns)
+        stats_list = [get_log_stats(new_df, colonna) for colonna in new_df.columns]
+
+        # Extracting MOPS ID
+        stats_list[0] = current_ID
+
+        # Adding stats to current report and to master report
+        stats_row.loc[len(stats_row)] = stats_list
+        new_df = new_df.append(pd.Series(), ignore_index=True)
+        new_df = new_df.append(stats_row)
+        master_df = master_df.append(stats_row)
+
+        if make_subs:
+            currentFileName = current_ID + '.xlsx'
+            currentFullPath = os.path.join(final_path, currentFileName)
+            try:
+                new_df.to_excel(currentFullPath, index=False)
+            except PermissionError:
+                return currentFileName
+
+        new_df = pd.DataFrame()
+
+        if waitBar:
+            waitBar.setValue(index)
+
+    # Changing columns name and saving master report
+    if waitBar:
+        waitBar.setLabelText('Saving master report..')
+        App.processEvents()
+
+    # Creating rename mapper
+    rename_dict = {'PGA ref [g]': 'PGA ref [g]', 'PGV ref [cm/s]': 'PGV ref [cm/s]', 'H [m]': 'H [m]',
+                   'Vs H [m/s]': 'ln(VsH)', 'VS 30 [m/s]': 'ln(Vs30)', 'AF_PGA': 'ln(AF_PGA)',
+                   'AF_PGV': 'ln(AF_PGV)', 'AF [0.1 - 0.5s]': 'ln(AF) [0.1 - 0.5s]',
+                   'AF [0.4 - 0.8s]': 'ln(AF) [0.4 - 0.8s]', 'AF [0.7 - 1.1s]': 'ln(AF) [0.7 - 1.1s]'}
+    master_df = master_df.rename(columns=rename_dict)
+    saving_path = os.path.join(final_path, 'Master report.xlsx') if make_subs else final_path
+
+    try:
+        master_df.to_excel(saving_path, index=False, header=rename_dict.values)
+        waitBar.setValue(subfolder_num)
+        return 0
+    except PermissionError:
+        return saving_path
+
+
 def getBriefValues(computationObject, depth):
     """
     SUPERSEEDED BY NEW CLASSES IN SRAClasses.py

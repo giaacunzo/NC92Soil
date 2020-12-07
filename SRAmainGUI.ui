@@ -1393,10 +1393,19 @@
     <property name="title">
      <string>Tools</string>
     </property>
+    <widget class="QMenu" name="menuMerge_and_make_stats">
+     <property name="title">
+      <string>Merge and make stats</string>
+     </property>
+     <addaction name="actionGenerate_only_master"/>
+     <addaction name="actionGenerate_master_and_sub"/>
+    </widget>
     <addaction name="actionGenerateStochastic"/>
     <addaction name="separator"/>
     <addaction name="actionGeneratePermutated"/>
     <addaction name="actionGenerate_NTC"/>
+    <addaction name="separator"/>
+    <addaction name="menuMerge_and_make_stats"/>
    </widget>
    <addaction name="menuTools"/>
    <addaction name="menu"/>
@@ -1419,6 +1428,21 @@
   <action name="actionGenerate_NTC">
    <property name="text">
     <string>Generate NTC spectra</string>
+   </property>
+  </action>
+  <action name="actionGenerate_master_and_sub">
+   <property name="text">
+    <string>Generate master report with subreport</string>
+   </property>
+  </action>
+  <action name="actionGenerate_master_report">
+   <property name="text">
+    <string>Generate master report</string>
+   </property>
+  </action>
+  <action name="actionGenerate_only_master">
+   <property name="text">
+    <string>Generate master report</string>
    </property>
   </action>
  </widget>

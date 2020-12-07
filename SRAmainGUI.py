@@ -31,6 +31,12 @@ class Ui_MainWindow(object):
         self.actionGeneratePermutated.setObjectName(u"actionGeneratePermutated")
         self.actionGenerate_NTC = QAction(MainWindow)
         self.actionGenerate_NTC.setObjectName(u"actionGenerate_NTC")
+        self.actionGenerate_master_and_sub = QAction(MainWindow)
+        self.actionGenerate_master_and_sub.setObjectName(u"actionGenerate_master_and_sub")
+        self.actionGenerate_master_report = QAction(MainWindow)
+        self.actionGenerate_master_report.setObjectName(u"actionGenerate_master_report")
+        self.actionGenerate_only_master = QAction(MainWindow)
+        self.actionGenerate_only_master.setObjectName(u"actionGenerate_only_master")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.graphWidget = MplWidget(self.centralwidget)
@@ -416,6 +422,8 @@ class Ui_MainWindow(object):
         self.menu.setObjectName(u"menu")
         self.menuTools = QMenu(self.menubar)
         self.menuTools.setObjectName(u"menuTools")
+        self.menuMerge_and_make_stats = QMenu(self.menuTools)
+        self.menuMerge_and_make_stats.setObjectName(u"menuMerge_and_make_stats")
         MainWindow.setMenuBar(self.menubar)
 
         self.menubar.addAction(self.menuTools.menuAction())
@@ -425,6 +433,10 @@ class Ui_MainWindow(object):
         self.menuTools.addSeparator()
         self.menuTools.addAction(self.actionGeneratePermutated)
         self.menuTools.addAction(self.actionGenerate_NTC)
+        self.menuTools.addSeparator()
+        self.menuTools.addAction(self.menuMerge_and_make_stats.menuAction())
+        self.menuMerge_and_make_stats.addAction(self.actionGenerate_only_master)
+        self.menuMerge_and_make_stats.addAction(self.actionGenerate_master_and_sub)
 
         self.retranslateUi(MainWindow)
 
@@ -437,6 +449,9 @@ class Ui_MainWindow(object):
         self.actionGenerateStochastic.setText(QCoreApplication.translate("MainWindow", u"Generate stochastic input", None))
         self.actionGeneratePermutated.setText(QCoreApplication.translate("MainWindow", u"Generate permutated input (beta)", None))
         self.actionGenerate_NTC.setText(QCoreApplication.translate("MainWindow", u"Generate NTC spectra", None))
+        self.actionGenerate_master_and_sub.setText(QCoreApplication.translate("MainWindow", u"Generate master report with subreport", None))
+        self.actionGenerate_master_report.setText(QCoreApplication.translate("MainWindow", u"Generate master report", None))
+        self.actionGenerate_only_master.setText(QCoreApplication.translate("MainWindow", u"Generate master report", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem1 = self.tableWidget_Soil.horizontalHeaderItem(1)
@@ -556,5 +571,6 @@ class Ui_MainWindow(object):
         self.checkBox_updatePlots.setText(QCoreApplication.translate("MainWindow", u"Update plot (batch only)", None))
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"?", None))
         self.menuTools.setTitle(QCoreApplication.translate("MainWindow", u"Tools", None))
+        self.menuMerge_and_make_stats.setTitle(QCoreApplication.translate("MainWindow", u"Merge and make stats", None))
     # retranslateUi
 

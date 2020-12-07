@@ -28,7 +28,7 @@ def aboutMessage():
         mixer.music.play()
     except pygameexception:
         pass
-    mixer.music.set_volume(0.5)
+    mixer.music.set_volume(0.3)
     Messaggio.exec_()
     mixer.music.stop()
 
@@ -49,6 +49,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.assignWidgets()
         self.setDefault()
         self.show()
+        aboutMessage()
 
     def setDefault(self):
         # Formattazione delle tabelle
@@ -91,6 +92,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
+        self.actionGenerate_only_master.triggered.connect(self.makeStats)
+        self.actionGenerate_master_and_sub.triggered.connect(self.makeStats)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -446,16 +449,20 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         risultatiDict = dict()
         profiliDF = pd.DataFrame()
 
-        waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, totalProfiles-1)
-        waitBar.setWindowTitle('NC92-Soil')
-        waitBar.setValue(0)
-        waitBar.setMinimumDuration(0)
-        waitBar.show()
-        App.processEvents()
+        if not batchAnalysis:
+            waitBar = QProgressDialog("Running analysis, please wait..", "Cancel", 0, totalProfiles-1)
+            waitBar.setWindowTitle('NC92-Soil')
+            waitBar.setValue(0)
+            waitBar.setMinimumDuration(0)
+            waitBar.show()
+            App.processEvents()
+        else:
+            waitBar = None
 
         for numberProfile, profiloCorrente in enumerate(profilePermutations):
 
-            waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
+            if waitBar:
+                waitBar.setLabelText('Profile {} of {}..'.format(numberProfile+1, totalProfiles))
 
             profileList = SRALib.addDepths(profiloCorrente)  # Add depths to current profile
             currentSoilList, profileList, curveStd = SRALib.addVariableProperties(
@@ -519,8 +526,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     else:
                         risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
 
-            waitBar.setValue(numberProfile)
-            App.processEvents()
+            if waitBar:
+                waitBar.setValue(numberProfile)
+                App.processEvents()
 
         # Scrittura dei risultati
         vociOutput = risultatiDict.keys()
@@ -714,6 +722,18 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         batchObjectList = self.batchObject
 
+        totalAnalysis = sum([element.profileNumber for element in batchObjectList])
+        if totalAnalysis > 0:
+            waitBar = QProgressDialog("Analyzing {} profiles...", "Cancel", 0, totalAnalysis)
+            waitBar.setWindowTitle('NC92-Soil Batch')
+            waitBar.setValue(0)
+            waitBar.setMinimumDuration(0)
+            waitBar.show()
+            App.processEvents()
+        else:
+            waitBar = None
+
+        all_profile_counter = 0
         for fileIndex, batchObject in enumerate(batchObjectList):
             numberClusters = batchObject.clusterNumber
             numberProfiles = batchObject.profileNumber
@@ -790,7 +810,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 curveStdVector = batchObject.getDegradationCurveStd()
 
                 for profileIndex in range(numberProfiles):
+                    all_profile_counter += 1
                     currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
+
                     currentMotions = [inputName
                                       for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
                                       if inputName.strip() != ""]
@@ -813,6 +835,12 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                             currentName = "{}-VS{}".format(
                                 batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
 
+                        # Updating waitbar
+                        if waitBar:
+                            waitBar.setLabelText('Processing profile {} in file {}'.format(
+                                currentName, os.path.basename(batchObject.filename)))
+                            App.processEvents()
+
                         currentFolder = os.path.join(profilesOutputFolder, currentName)
                         try:
                             os.mkdir(currentFolder)
@@ -832,6 +860,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                         'currentPrefix': currentName, 'profilePermutations': [currentProfile],
                                         'vsList': currentVsList, 'curveStd': curveStdVector}
                         self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+
+                    if waitBar:
+                        waitBar.setValue(all_profile_counter)
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
 
@@ -914,6 +945,38 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             App.processEvents()
 
         QMessageBox.information(QMessageBox(), 'OK', 'NTC spectra have been correctly saved')
+
+    def makeStats(self):
+        caller_obj = self.sender().objectName()
+
+        analysis_folder = QFileDialog.getExistingDirectory(self, 'Choose the folder containining the analysis output')
+        if analysis_folder == '':
+            return None
+
+        if caller_obj == 'actionGenerate_only_master':
+            output_path = QFileDialog.getSaveFileName(self, caption='Choose the name of the merged report"',
+                                                      filter='Excel Files (*.xlsx)')[0]
+            if output_path == "":
+                return None
+
+            make_subs = False
+        else:
+            output_path = QFileDialog.getExistingDirectory(self, 'Choose the folder where the reports will be saved')
+            if output_path == '':
+                return None
+            make_subs = True
+
+        waitBar = QProgressDialog("Preparing merge, please wait...", "Cancel", 0, 1)
+        waitBar.show()
+        App.processEvents()
+        exitCode = SRALib.makeStats(analysis_folder, output_path, make_subs, waitBar, App)
+
+        if exitCode == 0:
+            QMessageBox.information(QMessageBox(), 'OK', 'Merge has been correctly performed.')
+        else:
+            msg = "Permission error while writing file  {}. If the file is open, close it and run merge again"
+            QMessageBox.warning(QMessageBox(), "Permission error", msg)
+
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)

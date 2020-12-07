@@ -41,8 +41,11 @@ class BriefReportOutput(pysra.output.Output):
         inputPGA = calc.motion.pga  # PGA in g
         inputPGV = calc.motion.pgv * 100  # PGV in cm/s
 
-        vs30 = self.calcVs30(calc)
+        # Computing H, VsH and Vs30
+        H, vsH, vs30 = self.calcVs30(calc)
+
         self.maxValuesDict = {'PGA ref [g]': inputPGA, 'PGV ref [cm/s]': inputPGV,
+                              'H [m]': H, 'Vs H [m/s]': vsH,
                               'Shallow soil name': shallowSoilName, 'VS 30 [m/s]': vs30,
                               'AF_PGA': maxAcc/inputPGA, 'AF_PGV': maxVel/inputPGV}
 
@@ -80,6 +83,13 @@ class BriefReportOutput(pysra.output.Output):
     def calcVs30(calc):
         currentThickness = list(calc.profile.thickness).copy()
         currentVelocities = list(calc.profile.initial_shear_vel).copy()
+
+        # Computing VsH
+        H = sum(currentThickness)
+        vsHValue = H / sum([thickness / Vs for thickness, Vs in
+                            zip(currentThickness, currentVelocities)])
+
+        # Computing Vs30
         if max(calc.profile.depth) < 30:
             lastLayerThick = 30 - max(calc.profile.depth)
             currentThickness[-1] = lastLayerThick
@@ -93,7 +103,7 @@ class BriefReportOutput(pysra.output.Output):
 
         vs30Value = 30/sum([thickness/Vs for thickness, Vs in
                             zip(currentThickness, currentVelocities)])
-        return vs30Value
+        return H, vsHValue, vs30Value
 
     def updateValues(self):
         currentDict = self.maxValuesDict
@@ -206,6 +216,7 @@ class StochasticAnalyzer:
         self.correlationMode = currentStochastic['Correlation mode'][0]
         self.vsLimit = currentStochastic['Bedrock Vs\n[m/s]'][0]
         self.inputFiles = currentStochastic['Input files'][0]
+        self.maxDepth = currentStochastic['Max depth\n[m]'][0]
 
         # Check of random seed
         if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0], float):
@@ -325,16 +336,47 @@ class StochasticAnalyzer:
         for index, group in self._rawGroups.iterrows():
             currentLayeredProfile = []
             groupName = group['Group name']
-            if index == len(self._rawGroups) - 1:
-                groupThickness = 100 - totalDepth
-            else:
-                groupThickness = np.random.randint(group['Min thickness\n[m]'], group['Max thickness\n[m]'] + 1)
-                totalDepth += groupThickness
 
+            # Choosing a random group if separator is found
             if separator in groupName:
+                # Cleaning string if given in tuple format
                 groupName = self.randomGroup(groupName, separator)
+                group_orig_name = groupName[1]
+            else:
+                group_orig_name = groupName
 
-            for counter in range(groupThickness):
+            # Setting default minimum thickness for the group if not specified
+            if np.isnan(group['Min thickness\n[m]']) or int(group['Min thickness\n[m]']) == -1:
+                default_group = self._allSoils[self._allSoils['Orig name'] == group_orig_name]['Min thickness\n[m]']
+                minThickness = default_group.values[0]
+            else:
+                minThickness = group['Min thickness\n[m]']
+
+            # Setting default maximum thickness for the group if not specified
+            if np.isnan(group['Max thickness\n[m]']) or int(group['Max thickness\n[m]']) == -1:
+                default_group = self._allSoils[self._allSoils['Orig name'] == group_orig_name]['Max thickness\n[m]']
+                maxThickness = default_group.values[0]
+            else:
+                maxThickness = group['Max thickness\n[m]']
+
+            # Check for minimum and maximum order
+            if minThickness > maxThickness:
+                old_min = minThickness
+                minThickness = maxThickness
+                maxThickness = old_min
+
+            # If last group, depth is extended until defined limit
+            if index == len(self._rawGroups) - 1:
+                groupThickness = self.maxDepth - totalDepth
+                VsMin = np.nan
+                VsMax = np.nan
+            else:
+                groupThickness = np.random.randint(minThickness, maxThickness + 1)
+                totalDepth += groupThickness
+                VsMin = group['Vs min\n[m/s]']
+                VsMax = group['Vs max\n[m/s]']
+
+            for counter in range(int(groupThickness)):
                 currentCentroid = currentDepth + 1/2
                 currentDepth += 1
 
@@ -358,7 +400,7 @@ class StochasticAnalyzer:
                     group_name = groupName
 
                 soil_name, meanVsValue, stdVsValue = self.parseLaw(group_name, currentCentroid, currentLaw)
-                currentLayeredProfile.append([currentCentroid, 1, soil_name, meanVsValue, stdVsValue])
+                currentLayeredProfile.append([currentCentroid, 1, soil_name, meanVsValue, stdVsValue, VsMin, VsMax])
 
             layeredProfile.extend(currentLayeredProfile)  # Extending final profile list
             layeredSplitted.append(currentLayeredProfile)  # Adding current subprofile to the splitted list
@@ -407,6 +449,17 @@ class StochasticAnalyzer:
                     currentVs = np.exp(float(sigmaLogn*currentNormValue + muLogn))
 
                 lastNormValue = currentNormValue
+
+            # Checking Vs limit
+            VsMin = layer[5]
+            VsMax = layer[6]
+
+            if not (np.isnan(VsMin) or VsMin == -1):
+                currentVs = max(currentVs, VsMin)
+
+            if not(np.isnan(VsMax) or VsMax == -1):
+                currentVs = min(currentVs, VsMax)
+
             # Appending generated layer in list
             finalLayers.append([layer[1], layer[2], float(currentVs)])
 
