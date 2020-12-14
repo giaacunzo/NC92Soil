@@ -22,7 +22,7 @@ def aboutMessage():
     Messaggio = QMessageBox()
     Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
                       "\nCNR IGAG")
-    Messaggio.setWindowTitle("NC92-Soil")
+    Messaggio.setWindowTitle("NC92-Soil rev 13")
     try:
         mixer.music.load('about.mp3')
         mixer.music.play()
@@ -94,6 +94,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
         self.actionGenerate_only_master.triggered.connect(self.makeStats)
         self.actionGenerate_master_and_sub.triggered.connect(self.makeStats)
+        self.actionLoadspectra.triggered.connect(self.loadSpectra)
+        self.actionRun_analysis.triggered.connect(self.runBatch)
 
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
@@ -253,6 +255,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             # Switching signal for run button to manual analysis
             self.pushButton_run.clicked.disconnect()
             self.pushButton_run.clicked.connect(self.runAnalysis)
+
+            # Deactivating support button
+            self.actionRun_analysis.setEnabled(False)
+
         elif currentData == 'Regular analysis':
             self.lineEdit_brickSize.setEnabled(False)
             self.plainTextEdit_overview.setEnabled(False)
@@ -275,6 +281,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.pushButton_run.clicked.disconnect()
             self.pushButton_run.clicked.connect(self.runAnalysis)
 
+            # Deactivating support button
+            self.actionRun_analysis.setEnabled(False)
+
         elif currentData == 'Batch analysis':
             self.lineEdit_brickSize.setEnabled(False)
             self.plainTextEdit_overview.setEnabled(False)
@@ -296,6 +305,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             # Switching signal for run button to batch analysis
             self.pushButton_run.clicked.disconnect()
             self.pushButton_run.clicked.connect(self.runBatch)
+
+            # Activating support button
+            self.actionRun_analysis.setEnabled(True)
 
     def changeInputPanel(self):
         if self.comboBox_THorRVT.currentText() == 'RVT':
@@ -623,8 +635,21 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             self.batchObject.clear()
 
-            for element in batchFile[0]:
+            waitBar = QProgressDialog("Importing {} batch files, please wait..".format(len(batchFile[0])),
+                                      'Cancel', 0, len(batchFile[0]))
+            waitBar.setWindowTitle('Importing batch')
+            waitBar.setValue(0)
+            waitBar.setMinimumDuration(0)
+            waitBar.show()
+
+            for index, element in enumerate(batchFile[0]):
+                waitBar.setLabelText("Importing file {}\n({} of {})".format(element, index + 1, len(batchFile[0])))
+                App.processEvents()
+
                 self.batchObject.append(BatchAnalyzer(element))
+
+                waitBar.setValue(index + 1)
+                App.processEvents()
 
         QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
 
@@ -921,8 +946,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if outputFolder == '':
             return None
 
-        mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic').dropna(axis=0, subset=['Lon']).\
-            drop_duplicates(subset='ID CODE').reset_index()
+        mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}).\
+            dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
         A = NTCCalculator('NTC2008.csv')
 
         number_rows = len(mops_coord)

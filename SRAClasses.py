@@ -5,6 +5,9 @@ import sympy
 import SRALibrary as NCLib
 import os
 
+# DECLARING CONSTANTS
+INF_DEPTH = 10000
+
 
 class BriefReportOutput(pysra.output.Output):
     """
@@ -209,9 +212,13 @@ class StochasticAnalyzer:
     """
 
     def __init__(self, filename):
-        currentStochastic = pd.read_excel(filename, sheet_name='Stochastic')
-        currentGroupsDef = pd.read_excel(filename, sheet_name='Group definitions')
+        currentStochastic = pd.read_excel(filename, sheet_name='Stochastic', dtype={'ID CODE': str}).\
+            dropna(subset=['ID CODE'])
+        currentGroupsDef = pd.read_excel(filename, sheet_name='Group definitions').\
+            dropna(subset=['Group name'])
 
+        # Stripping ID CODE strings
+        currentStochastic['ID CODE'] = [orig_name.strip() for orig_name in currentStochastic['ID CODE']]
         self.numberIterations = int(currentStochastic['Number of iterations'][0])
         self.correlationMode = currentStochastic['Correlation mode'][0]
         self.vsLimit = currentStochastic['Bedrock Vs\n[m/s]'][0]
@@ -232,7 +239,7 @@ class StochasticAnalyzer:
         #     vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
         #     currentStochastic.loc[index, 'Vs Law'] = vsLawObject
 
-        self.idList = sorted(set(currentStochastic['ID CODE']))
+        self.idList = self.make_unique_list(currentStochastic['ID CODE'])
         self._allData = currentStochastic
         self._allSoils = self.makeSoils(currentGroupsDef)
         self._rawGroups = pd.DataFrame()
@@ -242,13 +249,23 @@ class StochasticAnalyzer:
         np.random.seed(self.randomSeed)
 
     @staticmethod
+    def make_unique_list(orig_list):
+        unique_list = list()
+
+        for value in orig_list:
+            if value not in unique_list:
+                unique_list.append(value)
+
+        return unique_list
+
+    @staticmethod
     def makeSoils(soil_sheet):
 
         for index, row in soil_sheet.iterrows():
             if np.isnan(row['From\n[m]']):
                 soil_sheet.loc[index, 'From\n[m]'] = 0
             if np.isnan(row['To\n[m]']):
-                soil_sheet.loc[index, 'To\n[m]'] = 1000
+                soil_sheet.loc[index, 'To\n[m]'] = INF_DEPTH
 
         # Parse the Vs laws
         for index, vsLaw in enumerate(soil_sheet['Vs Law']):
@@ -324,7 +341,7 @@ class StochasticAnalyzer:
     @staticmethod
     def randomGroup(groupNames, separator):
         random_index = np.random.randint(0, len(groupNames.split(separator)))
-        return random_index, groupNames.split(separator)[random_index]
+        return random_index, groupNames.split(separator)[random_index].strip()
 
     def generateRndProfile(self):
         # Creating basic layered profile as [centroid, thickness, name]
@@ -382,7 +399,11 @@ class StochasticAnalyzer:
 
                 # Evaluating mean Vs value from the given relation
                 if isinstance(groupName, tuple):  # Randomly chosen GT group, associating corresponding law
-                    lawValue = [law.strip() for law in group['Vs Law'].split(separator)][groupName[0]]
+                    try:
+                        lawValue = [law.strip() for law in group['Vs Law'].split(separator)][groupName[0]]
+                    except AttributeError:  # Vs law has not been specified for each group
+                        lawValue = str(group['Vs Law']) if not np.isnan(group['Vs Law']) else '-1'
+
                     group_name = groupName[1]
                     if lawValue == "-1":  # Using Vs law and Sigma logn from main soil sheet
                         currentLaw = None
@@ -667,7 +688,7 @@ class ClusterPermutator:
                 if np.isnan(row['From\n[m]']):
                     soil_definition.loc[index, 'From\n[m]'] = 0
                 if np.isnan(row['To \n[m]']):
-                    soil_definition.loc[index, 'To \n[m]'] = 1000
+                    soil_definition.loc[index, 'To \n[m]'] = INF_DEPTH
 
         soil_names = set(soil_definition['Soil name'])
 
@@ -721,7 +742,7 @@ class ClusterPermutator:
         # Adding bedrock definitions
         bedrock_sheet = self.bedrocks.drop(columns=['index']).rename(columns={'Vs law': 'Vs\n[m/s]'})
         bedrock_sheet.insert(2, 'From\n[m]', 0)
-        bedrock_sheet.insert(3, 'To \n[m]', 1000)
+        bedrock_sheet.insert(3, 'To \n[m]', INF_DEPTH)
         bedrock_sheet['Vs\n[m/s]'] = ""
         bedrock_sheet['Curve Std'] = ""
 
@@ -732,19 +753,6 @@ class ClusterPermutator:
                                        cluster_info_dict['Subcluster'])
         filename = os.path.join(self._output_folder, onlyname)
 
-        # # Creating soil sheet
-        # soil_sheet = self.soils.drop(columns=['index', 'Orig name']).rename(columns={'Vs law': 'Vs\n[m/s]'})
-        # soil_sheet['Curve Std'] = ""
-        # soil_sheet['Vs\n[m/s]'] = ""
-        #
-        # # Adding bedrock definitions
-        # bedrock_sheet = self.bedrocks.drop(columns=['index']).rename(columns={'Vs law': 'Vs\n[m/s]'})
-        # bedrock_sheet.insert(2, 'From\n[m]', 0)
-        # bedrock_sheet.insert(3, 'To \n[m]', 1000)
-        # bedrock_sheet['Vs\n[m/s]'] = ""
-        # bedrock_sheet['Curve Std'] = ""
-        #
-        # pd.concat([soil_sheet, bedrock_sheet]).to_excel(filename, index=False, sheet_name='Soils')
         self.makeFinalSoilSheet().to_excel(filename, index=False, sheet_name='Soils')
 
         # Creating profile sheet
