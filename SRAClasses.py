@@ -45,11 +45,11 @@ class BriefReportOutput(pysra.output.Output):
         inputPGV = calc.motion.pgv * 100  # PGV in cm/s
 
         # Computing H, VsH and Vs30
-        H, vsH, vs30 = self.calcVs30(calc)
+        H, vsH, vs30, vsEq = self.calcVs30(calc)
 
         self.maxValuesDict = {'PGA ref [g]': inputPGA, 'PGV ref [cm/s]': inputPGV,
                               'H [m]': H, 'Vs H [m/s]': vsH,
-                              'Shallow soil name': shallowSoilName, 'VS 30 [m/s]': vs30,
+                              'VS 30 [m/s]': vs30, 'VS Eq [m/s]': vsEq, 'Shallow soil name': shallowSoilName,
                               'AF_PGA': maxAcc/inputPGA, 'AF_PGV': maxVel/inputPGV}
 
     def computeAF(self, spectraObj):
@@ -106,7 +106,13 @@ class BriefReportOutput(pysra.output.Output):
 
         vs30Value = 30/sum([thickness/Vs for thickness, Vs in
                             zip(currentThickness, currentVelocities)])
-        return H, vsHValue, vs30Value
+
+        if H >= 30:
+            vsEqValue = vs30Value
+        else:
+            vsEqValue = vsHValue
+
+        return H, vsHValue, vs30Value, vsEqValue
 
     def updateValues(self):
         currentDict = self.maxValuesDict

@@ -18,19 +18,26 @@ from pygame import mixer, error as pygameexception
 
 
 def aboutMessage():
-    mixer.init()
     Messaggio = QMessageBox()
     Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle("NC92-Soil rev 13")
+
     try:
+        mixer.init()
         mixer.music.load('about.mp3')
         mixer.music.play()
-    except pygameexception:
+        mixer.music.set_volume(0.3)
+    # except pygameexception:
+    #     pass
+    except:
         pass
-    mixer.music.set_volume(0.3)
+
     Messaggio.exec_()
-    mixer.music.stop()
+    try:
+        mixer.music.stop()
+    except:
+        pass
 
 
 # noinspection PyCallByClass
@@ -48,6 +55,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.assignWidgets()
         self.setDefault()
+
+        # For testing
+        print('NC92Soil GUI correctly loaded')
+        App.processEvents()
+
         self.show()
         aboutMessage()
 
@@ -953,7 +965,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
                                   format(number_rows, tr), "Cancel", 0, number_rows)
-        waitBar.setWindowTitle('NC92-Soil permutator')
+        waitBar.setWindowTitle('NC92-Soil spectra generator')
         waitBar.setValue(0)
         waitBar.setMinimumDuration(0)
         waitBar.show()
@@ -999,7 +1011,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if exitCode == 0:
             QMessageBox.information(QMessageBox(), 'OK', 'Merge has been correctly performed.')
         else:
-            msg = "Permission error while writing file  {}. If the file is open, close it and run merge again"
+            msg = "Permission error while writing file : \n{}\nIf the file is open, close it and run merge again".\
+                format(exitCode)
             QMessageBox.warning(QMessageBox(), "Permission error", msg)
 
 

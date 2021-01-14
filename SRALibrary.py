@@ -511,29 +511,29 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
                             new_df = currentBriefReport
                         else:
                             new_df = new_df.append(currentBriefReport)
-        # Adding stats for current MOPS
-        # stats_row = pd.DataFrame(columns=['Analysis ID', 'Event', 'PGA ref [g]', 'PGV ref [cm/s]',
-        #                                   'ln(H) mean [m]', 'ln(VsH) mean [m/s]', 'Shallow soil name',
-        #                                   'ln(Vs30) mean [m/s]', 'ln(AF) [0.1 - 0.5s] mean',
-        #                                   'ln(AF) [0.4 - 0.8s] mean', 'ln(AF) [0.7 - 1.1s] mean'])
 
-        def get_log_stats(df, colonna):
-            try:
-                if colonna.startswith('PG') or colonna.startswith('H'):
-                    return np.mean(df[colonna]), np.std(df[colonna])
-                else:
-                    return np.mean(np.log(df[colonna])), np.std(np.log(df[colonna]))
-            except TypeError:
-                return df[colonna].values[0]
-
-        stats_row = pd.DataFrame(columns=new_df.columns)
-        stats_list = [get_log_stats(new_df, colonna) for colonna in new_df.columns]
-
-        # Extracting MOPS ID
-        stats_list[0] = current_ID
+        # Computing stats
+        stats_row = pd.DataFrame(index=[0])
+        for colonna in new_df.columns:
+            if colonna.lower() == 'analysis id':
+                stats_row[colonna] = '-'.join(new_df[colonna].values[0].split('-')[:-1])
+            else:
+                try:
+                    if colonna.startswith('PG') or colonna.startswith('H'):
+                        mean_column_name = "{} Mean".format(colonna)
+                        std_column_name = "{} Std".format(colonna)
+                        stats_row[mean_column_name] = np.mean(new_df[colonna])
+                        stats_row[std_column_name] = np.std(new_df[colonna])
+                    else:
+                        mean_column_name = "{} Log Mean".format(colonna)
+                        std_column_name = "{} Log Std".format(colonna)
+                        stats_row[mean_column_name] = np.mean(np.log(new_df[colonna]))
+                        stats_row[std_column_name] = np.std(np.log(new_df[colonna]))
+                except TypeError:
+                    stats_row[colonna] = new_df[colonna].values[0]
 
         # Adding stats to current report and to master report
-        stats_row.loc[len(stats_row)] = stats_list
+
         new_df = new_df.append(pd.Series(), ignore_index=True)
         new_df = new_df.append(stats_row)
         master_df = master_df.append(stats_row)
@@ -561,6 +561,9 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
                    'Vs H [m/s]': 'ln(VsH)', 'VS 30 [m/s]': 'ln(Vs30)', 'AF_PGA': 'ln(AF_PGA)',
                    'AF_PGV': 'ln(AF_PGV)', 'AF [0.1 - 0.5s]': 'ln(AF) [0.1 - 0.5s]',
                    'AF [0.4 - 0.8s]': 'ln(AF) [0.4 - 0.8s]', 'AF [0.7 - 1.1s]': 'ln(AF) [0.7 - 1.1s]'}
+
+    # Splitting means and standard deviation in master report
+
     master_df = master_df.rename(columns=rename_dict)
     saving_path = os.path.join(final_path, 'Master report.xlsx') if make_subs else final_path
 
