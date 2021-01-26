@@ -436,7 +436,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
     outputParam = analysisDict['OutputParam']
 
     outputObject = list()
-    if outputList[0]:  # Response spectrum
+    if outputList[0] or outputList[3]:  # Response spectrum (computed anyway if brief report is required)
         outputObject.append(pysra.output.ResponseSpectrumOutput(
             freqRange, pysra.output.OutputLocation('outcrop', depth=outputParam[0]),
             osc_damping=0.05))
@@ -458,6 +458,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
     computationEngine(inputMotion, finalProfile, finalProfile.location('outcrop', index=-1))
     finalOutput(computationEngine)
 
+    final_error = max([layer.max_error for layer in computationEngine.profile.layers])
     # If brief output is checked adds amplification factors using computed RS
     if outputList[3]:
         BriefObject = [briefOutput for briefOutput in finalOutput.outputs
@@ -465,11 +466,17 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
         RSObjects = [RSObj for RSObj in finalOutput.outputs if type(RSObj) == pysra.output.ResponseSpectrumOutput]
         BriefObject.computeAF(RSObjects)
 
-        # Deleting spectrum at bedrock level to prevent export
-        inputSpecIndex = [index for index, value in enumerate(finalOutput.outputs)
-                          if type(value) == pysra.output.ResponseSpectrumOutput and
-                          value.location.index == -1][0]
-        finalOutput.outputs.pop(inputSpecIndex)
+        # Deleting spectrum at bedrock level (and output spectrum if not required) to prevent export
+        if outputList[0]:
+            inputSpecIndex = [value for value in finalOutput.outputs
+                              if type(value) == pysra.output.ResponseSpectrumOutput and
+                              value.location.index == -1]
+        else:
+            inputSpecIndex = [value for value in finalOutput.outputs
+                              if type(value) == pysra.output.ResponseSpectrumOutput]
+
+        for element in inputSpecIndex:
+            finalOutput.outputs.remove(element)
 
     if waitBar is not None:
         waitBar.setLabelText('Running analysis...')
@@ -519,16 +526,18 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
                 stats_row[colonna] = '-'.join(new_df[colonna].values[0].split('-')[:-1])
             else:
                 try:
-                    if colonna.startswith('PG') or colonna.startswith('H'):
-                        mean_column_name = "{} Mean".format(colonna)
-                        std_column_name = "{} Std".format(colonna)
-                        stats_row[mean_column_name] = np.mean(new_df[colonna])
-                        stats_row[std_column_name] = np.std(new_df[colonna])
-                    else:
-                        mean_column_name = "{} Log Mean".format(colonna)
-                        std_column_name = "{} Log Std".format(colonna)
-                        stats_row[mean_column_name] = np.mean(np.log(new_df[colonna]))
-                        stats_row[std_column_name] = np.std(np.log(new_df[colonna]))
+                    # if colonna.startswith('PG') or colonna.startswith('H'):
+                    #     mean_column_name = "{} Mean".format(colonna)
+                    #     std_column_name = "{} Std".format(colonna)
+                    #     stats_row[mean_column_name] = np.mean(new_df[colonna])
+                    #     stats_row[std_column_name] = np.std(new_df[colonna])
+                    # else:
+
+                    # All stats given with log mean and std
+                    mean_column_name = "{} Log Mean".format(colonna)
+                    std_column_name = "{} Log Std".format(colonna)
+                    stats_row[mean_column_name] = np.mean(np.log(new_df[colonna]))
+                    stats_row[std_column_name] = np.std(np.log(new_df[colonna]))
                 except TypeError:
                     stats_row[colonna] = new_df[colonna].values[0]
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'SRAmainGUI_Albarello.ui'
+## Form generated from reading UI file 'SRAmainGUI.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.14.2
 ##
@@ -22,7 +22,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1368, 910)
+        MainWindow.resize(1383, 910)
         self.actionAbout = QAction(MainWindow)
         self.actionAbout.setObjectName(u"actionAbout")
         self.actionGenerateStochastic = QAction(MainWindow)
@@ -39,10 +39,6 @@ class Ui_MainWindow(object):
         self.actionGenerate_only_master.setObjectName(u"actionGenerate_only_master")
         self.actionLoadspectra = QAction(MainWindow)
         self.actionLoadspectra.setObjectName(u"actionLoadspectra")
-        self.actionRVT = QAction(MainWindow)
-        self.actionRVT.setObjectName(u"actionRVT")
-        self.actionTime_history = QAction(MainWindow)
-        self.actionTime_history.setObjectName(u"actionTime_history")
         self.actionRun_analysis = QAction(MainWindow)
         self.actionRun_analysis.setObjectName(u"actionRun_analysis")
         self.actionRun_analysis.setEnabled(False)
@@ -186,7 +182,7 @@ class Ui_MainWindow(object):
         self.label_17.setFont(font1)
         self.pushButton_run = QPushButton(self.centralwidget)
         self.pushButton_run.setObjectName(u"pushButton_run")
-        self.pushButton_run.setGeometry(QRect(1180, 530, 121, 28))
+        self.pushButton_run.setGeometry(QRect(1020, 840, 121, 28))
         self.lineEdit_maxFreq = QLineEdit(self.centralwidget)
         self.lineEdit_maxFreq.setObjectName(u"lineEdit_maxFreq")
         self.lineEdit_maxFreq.setGeometry(QRect(160, 530, 71, 22))
@@ -214,24 +210,24 @@ class Ui_MainWindow(object):
         self.label_6.setFont(font1)
         self.label_11 = QLabel(self.centralwidget)
         self.label_11.setObjectName(u"label_11")
-        self.label_11.setGeometry(QRect(1150, 590, 121, 16))
+        self.label_11.setGeometry(QRect(780, 790, 121, 16))
         self.label_11.setFont(font1)
         self.lineEdit_strainRatio = QLineEdit(self.centralwidget)
         self.lineEdit_strainRatio.setObjectName(u"lineEdit_strainRatio")
-        self.lineEdit_strainRatio.setGeometry(QRect(1290, 590, 61, 22))
+        self.lineEdit_strainRatio.setGeometry(QRect(920, 790, 61, 22))
         self.lineEdit_maxIter = QLineEdit(self.centralwidget)
         self.lineEdit_maxIter.setObjectName(u"lineEdit_maxIter")
-        self.lineEdit_maxIter.setGeometry(QRect(1290, 620, 61, 22))
+        self.lineEdit_maxIter.setGeometry(QRect(920, 820, 61, 22))
         self.label_12 = QLabel(self.centralwidget)
         self.label_12.setObjectName(u"label_12")
-        self.label_12.setGeometry(QRect(1150, 620, 121, 16))
+        self.label_12.setGeometry(QRect(780, 820, 121, 16))
         self.label_12.setFont(font1)
         self.lineEdit_maxTol = QLineEdit(self.centralwidget)
         self.lineEdit_maxTol.setObjectName(u"lineEdit_maxTol")
-        self.lineEdit_maxTol.setGeometry(QRect(1290, 650, 61, 22))
+        self.lineEdit_maxTol.setGeometry(QRect(920, 850, 61, 22))
         self.label_13 = QLabel(self.centralwidget)
         self.label_13.setObjectName(u"label_13")
-        self.label_13.setGeometry(QRect(1150, 650, 121, 16))
+        self.label_13.setGeometry(QRect(780, 850, 121, 16))
         self.label_13.setFont(font1)
         self.comboBox_analysisType = QComboBox(self.centralwidget)
         self.comboBox_analysisType.addItem("")
@@ -296,7 +292,7 @@ class Ui_MainWindow(object):
         self.comboBox_THorRVT.addItem("")
         self.comboBox_THorRVT.addItem("")
         self.comboBox_THorRVT.setObjectName(u"comboBox_THorRVT")
-        self.comboBox_THorRVT.setGeometry(QRect(790, 760, 121, 22))
+        self.comboBox_THorRVT.setGeometry(QRect(1020, 790, 121, 22))
         self.groupBox_RVT = QGroupBox(self.centralwidget)
         self.groupBox_RVT.setObjectName(u"groupBox_RVT")
         self.groupBox_RVT.setGeometry(QRect(20, 570, 741, 301))
@@ -426,7 +422,7 @@ class Ui_MainWindow(object):
         self.checkBox_updatePlots.raise_()
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 1368, 26))
+        self.menubar.setGeometry(QRect(0, 0, 1383, 26))
         self.menu = QMenu(self.menubar)
         self.menu.setObjectName(u"menu")
         self.menuTools = QMenu(self.menubar)
@@ -467,8 +463,6 @@ class Ui_MainWindow(object):
         self.actionGenerate_master_report.setText(QCoreApplication.translate("MainWindow", u"Generate master report", None))
         self.actionGenerate_only_master.setText(QCoreApplication.translate("MainWindow", u"Generate master report", None))
         self.actionLoadspectra.setText(QCoreApplication.translate("MainWindow", u"Load target spectra", None))
-        self.actionRVT.setText(QCoreApplication.translate("MainWindow", u"RVT", None))
-        self.actionTime_history.setText(QCoreApplication.translate("MainWindow", u"Time history", None))
         self.actionRun_analysis.setText(QCoreApplication.translate("MainWindow", u"Run batch analysis", None))
         ___qtablewidgetitem = self.tableWidget_Soil.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Name", None));
@@ -558,7 +552,6 @@ class Ui_MainWindow(object):
         self.comboBox_THorRVT.setItemText(0, QCoreApplication.translate("MainWindow", u"Time History", None))
         self.comboBox_THorRVT.setItemText(1, QCoreApplication.translate("MainWindow", u"RVT", None))
 
-        self.comboBox_THorRVT.setCurrentText(QCoreApplication.translate("MainWindow", u"Time History", None))
         self.groupBox_RVT.setTitle(QCoreApplication.translate("MainWindow", u"RVT", None))
         self.label_18.setText(QCoreApplication.translate("MainWindow", u"File name", None))
         self.label_19.setText(QCoreApplication.translate("MainWindow", u"Original units", None))

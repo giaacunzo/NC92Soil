@@ -12,6 +12,7 @@ import sys
 import SRALibrary as SRALib
 import pandas as pd
 import os
+from time import time
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 
 from pygame import mixer, error as pygameexception
@@ -112,12 +113,12 @@ class SRAApp(QMainWindow, Ui_MainWindow):
     def updateOutputInfo(self):
         if self.sender() is self.lineEdit_RSDepth:
             self.lineEdit_briefDepth.setText(self.sender().text())
-        elif self.sender() is self.checkBox_outBrief:
-            if self.sender().isChecked():
-                self.checkBox_outRS.setChecked(True)
-        elif self.sender() is self.checkBox_outRS:
-            if not self.sender().isChecked():
-                self.checkBox_outBrief.setChecked(False)
+        # elif self.sender() is self.checkBox_outBrief:
+        #     if self.sender().isChecked():
+        #         self.checkBox_outRS.setChecked(True)
+        # elif self.sender() is self.checkBox_outRS:
+        #     if not self.sender().isChecked():
+        #         self.checkBox_outBrief.setChecked(False)
 
     def addRow(self, sender):
         if not sender:
@@ -507,8 +508,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
             for fileName in currentData.keys():
 
-                OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList, analysisDB,
-                                                  curveStd)
+                OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList,
+                                                               analysisDB, curveStd)
 
                 # Esportazione output
                 for risultato in OutputResult:
@@ -574,11 +575,10 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                     risultatiDict[voce][evento].to_excel(writer, sheet_name=evento, index=writeIndex)
                 firstIter = False
 
-        # Writing profile table
-        profiliExcelFile = os.path.join(outputFolder, 'Profiles.xlsx')
-        profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
-
         if not batchAnalysis:
+            # Writing profile table
+            profiliExcelFile = os.path.join(outputFolder, 'Profiles.xlsx')
+            profiliDF.to_excel(profiliExcelFile, sheet_name='Profiles table', index=False)
             QMessageBox.information(QMessageBox(), 'OK', 'Analysis results have been correctly exported')
 
     def preAnalysisChecks(self, soilList, profileList, permutationList, outputList):
@@ -772,6 +772,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         all_profile_counter = 0
         for fileIndex, batchObject in enumerate(batchObjectList):
+
+            # TEST CODE FOR MULTITHREADING
+            # Check per verifica tempi
+            current_time = time()
+
             numberClusters = batchObject.clusterNumber
             numberProfiles = batchObject.profileNumber
 
@@ -831,8 +836,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
             # Batch analysis with profiles
             if numberProfiles > 0:
-                self.tableWidget_Permutations.hide()
-                self.tableWidget_Profile.show()
+                if fileIndex == 0:
+                    self.tableWidget_Permutations.hide()
+                    self.tableWidget_Profile.show()
 
                 currentProfilesID = os.path.splitext(os.path.split(batchObject.filename)[1])[0]
                 self.label_profileProp.setText('Profile (from input file)')
@@ -845,6 +851,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                 # Getting information about degradation curves std
                 curveStdVector = batchObject.getDegradationCurveStd()
+
+                # Updating waitbar
+                if waitBar:
+                    # waitBar.setLabelText('Processing profile {} in file {}'.format(
+                    #     currentName, os.path.basename(batchObject.filename)))
+                    waitBar.setLabelText('Processing file {}'.format(
+                        os.path.basename(batchObject.filename)))
+                    App.processEvents()
 
                 for profileIndex in range(numberProfiles):
                     all_profile_counter += 1
@@ -872,12 +886,6 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                             currentName = "{}-VS{}".format(
                                 batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
 
-                        # Updating waitbar
-                        if waitBar:
-                            waitBar.setLabelText('Processing profile {} in file {}'.format(
-                                currentName, os.path.basename(batchObject.filename)))
-                            App.processEvents()
-
                         currentFolder = os.path.join(profilesOutputFolder, currentName)
                         try:
                             os.mkdir(currentFolder)
@@ -890,6 +898,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                         if self.checkBox_updatePlots.isChecked() and vsIndex == 0:
                             self.makeProfile()
+                            App.processEvents()
 
                         # Running analysis
                         batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions,
@@ -898,9 +907,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                         'vsList': currentVsList, 'curveStd': curveStdVector}
                         self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
-                    if waitBar:
-                        waitBar.setValue(all_profile_counter)
+                if waitBar:
+                    waitBar.setValue(all_profile_counter)
 
+            print('File "{}" - {:.2f} s'.format(batchObject.filename, time()-current_time))
+            App.processEvents()
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
 
     def list2table(self, soilTable=None, permutationTable=None, profileTable=None):

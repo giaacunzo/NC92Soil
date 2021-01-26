@@ -4,6 +4,7 @@ import pandas as pd
 import sympy
 import SRALibrary as NCLib
 import os
+from PySide2 import QtCore
 
 # DECLARING CONSTANTS
 INF_DEPTH = 10000
@@ -47,7 +48,11 @@ class BriefReportOutput(pysra.output.Output):
         # Computing H, VsH and Vs30
         H, vsH, vs30, vsEq = self.calcVs30(calc)
 
+        # Computing max final error
+        final_error = max([layer.max_error for layer in calc.profile.layers])
+
         self.maxValuesDict = {'PGA ref [g]': inputPGA, 'PGV ref [cm/s]': inputPGV,
+                              'Final error [%]': final_error,
                               'H [m]': H, 'Vs H [m/s]': vsH,
                               'VS 30 [m/s]': vs30, 'VS Eq [m/s]': vsEq, 'Shallow soil name': shallowSoilName,
                               'AF_PGA': maxAcc/inputPGA, 'AF_PGV': maxVel/inputPGV}
