@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1368</width>
-    <height>910</height>
+    <width>1374</width>
+    <height>903</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -313,9 +313,9 @@
     <property name="geometry">
      <rect>
       <x>780</x>
-      <y>580</y>
+      <y>570</y>
       <width>361</width>
-      <height>161</height>
+      <height>171</height>
      </rect>
     </property>
     <property name="title">
@@ -502,6 +502,66 @@
       <rect>
        <x>300</x>
        <y>110</y>
+       <width>21</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>m</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="lineEdit_FourierDepth">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>140</y>
+       <width>91</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Choose the depth at which the Fourier spectrum must be calculated.&lt;/p&gt;&lt;p&gt;Enabling this option, also the Fourier spectrum at bedrock depth (within and outcrop) will be exported by default&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="text">
+      <string>0</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="checkBox_Fourier">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>140</y>
+       <width>151</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Transfer functions</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_24">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>140</y>
        <width>21</width>
        <height>16</height>
       </rect>
@@ -990,7 +1050,7 @@
     <property name="geometry">
      <rect>
       <x>790</x>
-      <y>760</y>
+      <y>750</y>
       <width>121</width>
       <height>22</height>
      </rect>
@@ -1382,7 +1442,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1368</width>
+     <width>1374</width>
      <height>26</height>
     </rect>
    </property>

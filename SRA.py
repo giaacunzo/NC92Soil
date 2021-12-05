@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide2.QtWidgets import *
 from PySide2 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer, ClusterPermutator, NTCCalculator, ClusterToMOPS
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS
 import numpy as np
 import sys
 import SRALibrary as SRALib
@@ -22,7 +22,7 @@ def aboutMessage():
     Messaggio = QMessageBox()
     Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
                       "\nCNR IGAG")
-    Messaggio.setWindowTitle("NC92-Soil rev 13")
+    Messaggio.setWindowTitle("NC92-Soil rev 15")
 
     try:
         mixer.init()
@@ -348,7 +348,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
-                                                        filter='Text files (*.txt)')[0]
+                                                        filter='Text files (*.txt);;All files (*.*)')[0]
         if len(timeHistoryFiles) == 0:
             return None
 
@@ -414,10 +414,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         soilList, profileList, permutationList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile,
                                                                    self.tableWidget_Permutations)
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
-                      self.checkBox_outStrain.isChecked(), self.checkBox_outBrief.isChecked()]
+                      self.checkBox_outStrain.isChecked(), self.checkBox_outBrief.isChecked(),
+                      self.checkBox_Fourier.isChecked()]
         outputParam = [float(x.text())
                        for x in [self.lineEdit_RSDepth, self.lineEdit_accDepth, self.lineEdit_strainDepth,
-                                 self.lineEdit_briefDepth]]
+                                 self.lineEdit_briefDepth, self.lineEdit_FourierDepth]]
         LECalcOptions = [float(x.text())
                          for x in [self.lineEdit_strainRatio, self.lineEdit_maxTol, self.lineEdit_maxIter]]
         checkPreliminari = self.preAnalysisChecks(soilList, profileList, permutationList, outputList)
@@ -509,21 +510,27 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             for fileName in currentData.keys():
 
                 OutputResult = SRALib.runAnalysis(currentData[fileName][0], currentSoilList, profileList,
-                                                               analysisDB, curveStd)
+                                                  analysisDB, curveStd)
 
                 # Esportazione output
                 for risultato in OutputResult:
                     currentOutput = type(risultato).__name__
+                    ascLabel = ''
+
                     if currentOutput == 'ResponseSpectrumOutput':
                         periodVect = risultato.refs[::-1] ** -1
                         PSAVect = risultato.values[::-1]
                         currentDF = pd.DataFrame(np.array([periodVect, PSAVect])).T
+                        ascLabel = 'T [s]'
                     elif currentOutput == 'BriefReportOutput':
                         ascVect = risultato.refs
                         ordVect = risultato.values
                         currentDF = pd.DataFrame(ordVect).T
                         currentDF.columns = ascVect
                     else:
+                        if currentOutput == 'TransferFunctionOutput':
+                            currentOutput = "{} - ({})".format(currentOutput, risultato.tag)
+                            ascLabel = 'Frequency [Hz]'
                         ascVect = risultato.refs
                         ordVect = risultato.values
                         currentDF = pd.DataFrame(np.array([ascVect, ordVect])).T
@@ -536,7 +543,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                         if currentOutput != 'BriefReportOutput':
                             # risultatiDict[currentOutput][currentEvent] = pd.DataFrame(currentDF[0])
                             risultatiDict[currentOutput][currentEvent] = currentDF[0].to_frame().rename(
-                                columns={0: 'T [s]'})
+                                columns={0: ascLabel})
                         else:
                             risultatiDict[currentOutput][currentEvent] = pd.DataFrame(columns=risultato.refs)
 

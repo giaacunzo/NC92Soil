@@ -199,6 +199,7 @@ def drawTH(inputMotion, asseGrafico):
     asseGrafico.plot(inputMotion.times, inputMotion.accels)
     asseGrafico.set_xlabel('Time [s]')
     asseGrafico.set_ylabel('Acc [g]')
+    asseGrafico.figure.tight_layout(rect=[0, 0, 1, 0.92])
     asseGrafico.grid('on')
     asseGrafico.set_title(inputMotion.description)
 
@@ -206,8 +207,9 @@ def drawTH(inputMotion, asseGrafico):
 def drawSpectrum(inputSpectrum, eventID, asseGrafico, xlog=False, ylog=False):
     asseGrafico.clear()
     asseGrafico.plot(inputSpectrum[0], inputSpectrum[1])
-    asseGrafico.set_xlabel('Time [s]')
+    asseGrafico.set_xlabel('Period [s]')
     asseGrafico.set_ylabel('Acc [g]')
+    asseGrafico.figure.tight_layout(rect=[0, 0, 1, 0.92])
     asseGrafico.grid('on')
     asseGrafico.set_title(eventID)
 
@@ -231,6 +233,7 @@ def drawFAS(inputMotion, eventID, asseGrafico, xlog=False, ylog=False):
     asseGrafico.plot(freqs, amplitudes)
     asseGrafico.set_xlabel('Freq [Hz]')
     asseGrafico.set_ylabel('Ampl [g-s]')
+    asseGrafico.figure.tight_layout(rect=[0, 0, 1, 0.92])
 
     # Applying scale to X axis
     if xlog:
@@ -408,6 +411,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
         App.processEvents()
 
     # Creating profile
+    # Creating profile
     profileLayer = list()
     for riga in profileList:
         currentDepth, currentThickness, currentSoilName, currentVelocity = riga
@@ -430,6 +434,7 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
     strainRatio, errorTolerance, maxIterations = analysisDict['LECalcOptions']
     computationEngine = pysra.propagation.EquivalentLinearCalculator(strainRatio, errorTolerance, maxIterations)
     freqRange = np.logspace(-1, 2, num=91)  # Periods between 0.01 and 10 seconds
+    fourierFreqRange = np.linspace(0, 20, num=int(20/0.05))
 
     # Building output object
     outputList = analysisDict['OutputList']
@@ -452,6 +457,37 @@ def runAnalysis(inputMotion, soilList, profileList, analysisDict, curveStd, grap
         outputObject.append(pysra.output.ResponseSpectrumOutput(
             freqRange, pysra.output.OutputLocation('outcrop', index=-1),
             osc_damping=0.05))
+    if outputList[4]:  # Transfer functions
+        # ko_bandwith = None
+        # # Adding Fourier spectra for bedrock
+        # bedrock_outcrop = pysra.output.FourierAmplitudeSpectrumOutput(
+        #     freqs=fourierFreqRange, location=pysra.output.OutputLocation('outcrop', index=-1),
+        #     ko_bandwidth=ko_bandwith
+        # )
+        # bedrock_outcrop.ylabel = 'Bedrock - Outcrop [cm/s]'
+        # outputObject.append(bedrock_outcrop)
+        #
+        # bedrock_within = pysra.output.FourierAmplitudeSpectrumOutput(
+        #     freqs=fourierFreqRange, location=pysra.output.OutputLocation('within', index=-1),
+        #     ko_bandwidth=ko_bandwith
+        # )
+        # bedrock_within.ylabel = 'Bedrock - Within [cm/s]'
+        # outputObject.append(bedrock_within)
+        #
+        # # Adding Fourier spectrum for desired depth
+        # input_depth = pysra.output.FourierAmplitudeSpectrumOutput(
+        #     freqs=fourierFreqRange, location=pysra.output.OutputLocation('outcrop', depth=outputParam[4]),
+        #     ko_bandwidth=ko_bandwith
+        # )
+        # input_depth.ylabel = 'Depth = {:.2f} m [cm/s]'.format(outputParam[4])
+        #
+        # outputObject.append(input_depth)
+        bedrock_within = SRAClasses.TransferFunctionOutput(outputDepth=outputParam[4], source_interface='within',
+                                                           tag='Bedrock within')
+        bedrock_outcrop = SRAClasses.TransferFunctionOutput(outputDepth=outputParam[4], source_interface='outcrop',
+                                                            tag='Bedrock outcrop')
+        signal_FFT = SRAClasses.TransferFunctionOutput(outputDepth=None, only_FFT=True, tag='Signal FFT')
+        outputObject.extend([bedrock_outcrop, bedrock_within, signal_FFT])
 
     finalOutput = pysra.output.OutputCollection(outputObject)
 

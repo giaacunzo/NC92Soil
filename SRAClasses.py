@@ -4,6 +4,7 @@ import pandas as pd
 import sympy
 import SRALibrary as NCLib
 import os
+from scipy.signal import find_peaks
 from PySide2 import QtCore
 
 # DECLARING CONSTANTS
@@ -15,24 +16,49 @@ class BriefReportOutput(pysra.output.Output):
     New class for handling NC92Soil brief report as an output
     """
 
-    def __init__(self, outputDepth, sourceDepth=-1):
+    def __init__(self, outputDepth, sourceDepth=-1, source_interface='outcrop', output_interface='outcrop'):
         super().__init__()
 
         self._outputDepth = outputDepth
         self._sourceDepth = sourceDepth
+        self._source_interface = source_interface
+        self._output_interface = output_interface
         self._outputLocation = self._sourceLocation = None
         self.maxValuesDict = dict()
 
     def __call__(self, calc, name=None):
         if self._sourceDepth == -1:
-            self._sourceLocation = calc.profile.location('outcrop', index=-1)
+            self._sourceLocation = calc.profile.location(self._source_interface, index=-1)
         else:
-            self._sourceLocation = calc.profile.location('outcrop', depth=self._sourceDepth)
+            self._sourceLocation = calc.profile.location(self._source_interface, depth=self._sourceDepth)
 
-        self._outputLocation = calc.profile.location('within', depth=self._outputDepth)
+        self._outputLocation = calc.profile.location(self._output_interface, depth=self._outputDepth)
 
         currentWaveAccTF = calc.calc_accel_tf(self._sourceLocation, self._outputLocation)
         maxAcc = calc.motion.calc_peak(currentWaveAccTF)
+
+        # if outcrop is requested for AF computation, within is computed for F0
+        if self._source_interface == 'outcrop':
+            bedrock_within = calc.profile.location('within', index=-1)
+            currentWaveAccTF_F0 = calc.calc_accel_tf(bedrock_within, self._outputLocation)
+        else:
+            currentWaveAccTF_F0 = currentWaveAccTF
+
+        # Computinf F0
+        upper_bound = 60
+        freq_vect = calc.motion.freqs[calc.motion.freqs <= upper_bound]
+        # peaks_index, _ = find_peaks(
+        #     pysra.output.ko_smooth(freq_vect, calc.motion.freqs, abs(currentWaveAccTF), upper_bound)
+        # )
+        amplitude_vect = abs(currentWaveAccTF_F0[calc.motion.freqs <= upper_bound])
+        peaks_index, _ = find_peaks(amplitude_vect)
+        if len(peaks_index) > 0:
+            F0_first = freq_vect[peaks_index[0]]
+            F0_max_pos = peaks_index[amplitude_vect[peaks_index].argmax()]
+            F0_max = freq_vect[F0_max_pos]
+        else:
+            F0_max = ''
+            F0_first = ''
 
         # Computing fourier amplitude of velocities
         currentWaveVelTF = np.multiply(currentWaveAccTF, calc.motion.angular_freqs ** -1)
@@ -55,6 +81,7 @@ class BriefReportOutput(pysra.output.Output):
                               'Final error [%]': final_error,
                               'H [m]': H, 'Vs H [m/s]': vsH,
                               'VS 30 [m/s]': vs30, 'VS Eq [m/s]': vsEq, 'Shallow soil name': shallowSoilName,
+                              'F0 - First [Hz]': F0_first, 'F0 - Max [Hz]': F0_max,
                               'AF_PGA': maxAcc/inputPGA, 'AF_PGV': maxVel/inputPGV}
 
     def computeAF(self, spectraObj):
@@ -130,6 +157,47 @@ class BriefReportOutput(pysra.output.Output):
 
         self._refs = refs
         self._values = values
+
+
+class TransferFunctionOutput(pysra.output.Output):
+
+    def __init__(self, outputDepth, sourceDepth=-1, source_interface='within', output_interface='outcrop',
+                 upper_bound=60, tag=None, only_FFT=False):
+        super().__init__()
+
+        self._outputDepth = outputDepth
+        self._sourceDepth = sourceDepth
+        self._upper_bound = upper_bound
+        self._source_interface = source_interface
+        self._output_interface = output_interface
+        self._outputLocation = self._sourceLocation = None
+        self.tag = tag
+        self._only_FFT = only_FFT
+
+    def __call__(self, calc, name=None):
+        if self._only_FFT:
+            # Only signal FFT is required
+            freq_vect = np.array([freq for freq in calc.motion.freqs if freq <= self._upper_bound])
+            amplitude_vect = np.array([value for freq, value in zip(calc.motion.freqs, calc.motion.fourier_amps)
+                                       if freq <= self._upper_bound])
+            self._refs = np.real(freq_vect)
+            self._values = np.abs(amplitude_vect)
+            return None
+
+        if self._sourceDepth == -1:
+            self._sourceLocation = calc.profile.location(self._source_interface, index=-1)
+        else:
+            self._sourceLocation = calc.profile.location(self._source_interface, depth=self._sourceDepth)
+
+        self._outputLocation = calc.profile.location(self._output_interface, depth=self._outputDepth)
+
+        currentTF = calc.calc_accel_tf(lin=self._sourceLocation, lout=self._outputLocation)
+        freq_vect = np.array([freq for freq in calc.motion.freqs if freq <= self._upper_bound])
+        amplitude_vect = np.array([value for freq, value in zip(calc.motion.freqs, currentTF)
+                                   if freq <= self._upper_bound])
+
+        self._refs = np.real(freq_vect)
+        self._values = np.abs(amplitude_vect)
 
 
 class BatchAnalyzer:
@@ -361,6 +429,7 @@ class StochasticAnalyzer:
         layeredProfile = []
         layeredSplitted = []
         totalDepth = 0
+        bedrock_extended = False  # Set as default, will be changed further if required
         for index, group in self._rawGroups.iterrows():
             currentLayeredProfile = []
             groupName = group['Group name']
@@ -393,11 +462,20 @@ class StochasticAnalyzer:
                 minThickness = maxThickness
                 maxThickness = old_min
 
-            # If last group, depth is extended until defined limit
+            # If last group and bedrock extension is Y, depth is extended until defined limit
             if index == len(self._rawGroups) - 1:
-                groupThickness = self.maxDepth - totalDepth
-                VsMin = np.nan
-                VsMax = np.nan
+                if isinstance(group['Bedrock extension'], str) and \
+                        group['Bedrock extension'].lower() == 'y':  # Bedrock extension
+
+                    groupThickness = self.maxDepth - totalDepth
+                    VsMin = np.nan
+                    VsMax = np.nan
+
+                    bedrock_extended = True
+                else:  # Extract a random thickness as usual
+                    groupThickness = np.random.randint(minThickness, maxThickness + 1)
+                    VsMin = group['Vs min\n[m/s]']
+                    VsMax = group['Vs max\n[m/s]']
             else:
                 groupThickness = np.random.randint(minThickness, maxThickness + 1)
                 totalDepth += groupThickness
@@ -495,7 +573,8 @@ class StochasticAnalyzer:
             # Appending generated layer in list
             finalLayers.append([layer[1], layer[2], float(currentVs)])
 
-        finalLayers, correlationCoeffList = self.cutOnThreshold(finalLayers, correlationCoeffList)
+        if bedrock_extended:
+            finalLayers, correlationCoeffList = self.cutOnThreshold(finalLayers, correlationCoeffList)
 
         self.makeProfileColumn(finalLayers)
         self.makeCorrelationColumn(correlationCoeffList)
@@ -913,9 +992,13 @@ class ClusterToMOPS(ClusterPermutator):
         # Creating the Stochastic sheet
 
         stochastic_sheet = pd.DataFrame(columns=['ID CODE', 'Lat', 'Lon', 'Group name', 'Min thickness\n[m]',
-                                                 'Max thickness\n[m]', 'Vs Law', 'Sigma logn', ' ', '  ',
+                                                 'Max thickness\n[m]', 'Vs Law', 'Sigma logn', 'Vs min\n[m/s]',
+                                                 'Vs max\n[m/s]', 'Bedrock extension', ' ', '  ',
                                                  'Number of iterations', 'Input files', 'Random seed',
-                                                 'Correlation mode', 'Bedrock Vs\n[m/s]'])
+                                                 'Correlation mode', 'Bedrock Vs\n[m/s]', 'Max depth\n[m]'])
+
+        stochastic_sheet['Bedrock extension'] = 'N'  # Bedrock not extended by default
+
         for perm_index, permutation in enumerate(complete_profile):
             current_ID = "{}-{}-Perm{}".format(cluster_info_dict['Cluster name'], cluster_info_dict['Subcluster'],
                                                perm_index + 1)
@@ -928,6 +1011,7 @@ class ClusterToMOPS(ClusterPermutator):
                     currentRow['Input files'] = self._rawClusters['Input files'][0]
                     currentRow['Correlation mode'] = 'All profile'
                     currentRow['Bedrock Vs\n[m/s]'] = 800
+                    currentRow['Max depth\n[m]'] = 100
                 currentRow['ID CODE'] = current_ID
                 currentRow['Group name'] = soil_data[1]
                 currentRow['Min thickness\n[m]'] = soil_data[0]

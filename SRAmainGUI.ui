@@ -315,7 +315,7 @@
       <x>780</x>
       <y>580</y>
       <width>361</width>
-      <height>161</height>
+      <height>191</height>
      </rect>
     </property>
     <property name="title">
@@ -502,6 +502,66 @@
       <rect>
        <x>300</x>
        <y>110</y>
+       <width>21</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>m</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="lineEdit_FourierDepth">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>140</y>
+       <width>91</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Choose the depth at which the Fourier spectrum must be calculated.&lt;/p&gt;&lt;p&gt;Enabling this option, also the Fourier spectrum at bedrock depth (within and outcrop) will be exported by default&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="text">
+      <string>0</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="checkBox_Fourier">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>140</y>
+       <width>151</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Transfer functions</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_24">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>140</y>
        <width>21</width>
        <height>16</height>
       </rect>
@@ -875,6 +935,9 @@
      </property>
      <property name="toolTip">
       <string>If specified in input file, sample frequency will be automatically imported from input file</string>
+     </property>
+     <property name="text">
+      <string>200</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_7">
@@ -1328,11 +1391,11 @@
      <string>Update plot (batch only)</string>
     </property>
    </widget>
+   <zorder>groupBox_RVT</zorder>
    <zorder>tableWidget_Permutations</zorder>
    <zorder>tableWidget_Profile</zorder>
    <zorder>pushButton_loadBatch</zorder>
    <zorder>groupBox_TH</zorder>
-   <zorder>groupBox_RVT</zorder>
    <zorder>graphWidget</zorder>
    <zorder>tableWidget_Soil</zorder>
    <zorder>pushButton_addSoil</zorder>
