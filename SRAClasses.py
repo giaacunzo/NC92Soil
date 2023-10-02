@@ -5,7 +5,7 @@ import sympy
 import SRALibrary as NCLib
 import os
 from scipy.signal import find_peaks
-from PySide2 import QtCore
+from PySide6 import QtCore
 
 # DECLARING CONSTANTS
 INF_DEPTH = 10000
@@ -303,6 +303,8 @@ class StochasticAnalyzer:
         self.vsLimit = currentStochastic['Bedrock Vs\n[m/s]'][0]
         self.inputFiles = currentStochastic['Input files'][0]
         self.maxDepth = currentStochastic['Max depth\n[m]'][0]
+        self.vsPolicy = currentStochastic['Bedrock Vs policy'][0]
+        self.harmonicMeanDepth = currentStochastic['Harmonic mean depth\n[m]']
 
         # Check of random seed
         if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0], float):

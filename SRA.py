@@ -3,8 +3,8 @@ from warnings import filterwarnings
 filterwarnings('ignore', category=UserWarning)
 filterwarnings('ignore', category=RuntimeWarning)
 
-from PySide2.QtWidgets import *
-from PySide2 import QtCore
+from PySide6.QtWidgets import *
+from PySide6 import QtCore
 from SRAmainGUI import Ui_MainWindow
 from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS
 import numpy as np
@@ -18,11 +18,14 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
+NCVERSION = 0.91
+
+
 def aboutMessage():
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
+    Messaggio.setText(f"NC92-Soil\nversion {NCVERSION} beta\n"
                       "\nCNR IGAG")
-    Messaggio.setWindowTitle("NC92-Soil rev 15")
+    Messaggio.setWindowTitle(f"NC92-Soil rev {NCVERSION}")
 
     try:
         mixer.init()
@@ -70,6 +73,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.tableWidget_Soil.horizontalHeader().setStretchLastSection(True)
         self.tableWidget_Profile.resizeColumnsToContents()
         self.tableWidget_Profile.horizontalHeader().setStretchLastSection(True)
+        self.tableWidget_Permutations.setVisible(False)
+        self.pushButton_loadBatch.setVisible(False)
         self.changeInputPanel()
 
         # Caricamento database curve di decadimento
@@ -101,7 +106,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.checkBox_outBrief.stateChanged.connect(self.updateOutputInfo)
         self.checkBox_outRS.stateChanged.connect(self.updateOutputInfo)
         self.actionAbout.triggered.connect(aboutMessage)
-        self.pushButton_loadBatch.clicked.connect(self.loadBatch)
+        # self.pushButton_loadBatch.clicked.connect(self.loadBatch)
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
