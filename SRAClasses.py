@@ -268,8 +268,8 @@ class BatchAnalyzer:
         profileTable = list()
         VsList = list()
         currentProfile = self._rawProfiles.iloc[:, profileIndex]
-
-        for layer in currentProfile[1:]:
+        currentBedrockVs = currentProfile[1].split(':')[-1].strip()
+        for layer in currentProfile[2:]:
             # Nan check, skip cell if empty
             if isinstance(layer, float) and np.isnan(layer):
                 continue
@@ -282,7 +282,7 @@ class BatchAnalyzer:
             profileTable.append([float(layerThickness), layerName])
             VsList.append(float(layerVs))
 
-        return profileTable, VsList
+        return profileTable, VsList, currentBedrockVs
 
 
 class StochasticAnalyzer:
@@ -304,7 +304,7 @@ class StochasticAnalyzer:
         self.inputFiles = currentStochastic['Input files'][0]
         self.maxDepth = currentStochastic['Max depth\n[m]'][0]
         self.vsPolicy = currentStochastic['Bedrock Vs policy'][0]
-        self.harmonicMeanDepth = currentStochastic['Harmonic mean depth\n[m]']
+        self.harmonicMeanDepth = int(currentStochastic['Harmonic mean depth\n[m]'][0])
 
         # Check of random seed
         if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0], float):
@@ -353,7 +353,8 @@ class StochasticAnalyzer:
             vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
             soil_sheet.loc[index, 'Vs Law'] = vsLawObject
 
-        new_sheet = pd.DataFrame(columns=soil_sheet.columns)
+        # new_sheet = pd.DataFrame(columns=soil_sheet.columns)
+        new_sheet = pd.DataFrame()
         soils_set = set()
         unique_soils = [soil for soil in soil_sheet['Group name']
                         if soil not in soils_set and soils_set.add(soil) is None]
@@ -364,7 +365,8 @@ class StochasticAnalyzer:
             for index, row in current_defs.iterrows():
                 row['Orig name'] = soil
                 row['Group name'] = "{}[{}]".format(soil, index) if len(current_defs) > 1 else soil
-                new_sheet = new_sheet.append(row, ignore_index=True)
+                # new_sheet = new_sheet.append(row, ignore_index=True)
+                new_sheet = pd.concat([new_sheet, row.to_frame().T], ignore_index=True)
 
         return new_sheet
 
@@ -593,6 +595,34 @@ class StochasticAnalyzer:
         current_remaining = finalLayers[current_index + 1:]
 
         remaining_vs = 0
+        while len(current_remaining) > self.harmonicMeanDepth and remaining_vs < self.vsLimit:
+            current_num = sum([value[0] for value in current_remaining[:self.harmonicMeanDepth]])
+            current_denom = sum([thickness/value for thickness, _, value in current_remaining[:self.harmonicMeanDepth]])
+            remaining_vs = current_num / current_denom
+
+            current_index += 1
+            current_remaining.pop(0)
+
+        if len(current_remaining) <= self.harmonicMeanDepth:
+            return finalLayers, correlationCoeffList
+        else:
+            return finalLayers[:current_index], correlationCoeffList[:current_index]
+
+    def cutOnThreshold_old(self, finalLayers, correlationCoeffList):
+        """
+        SUPERSEDED BY NEW BEDROCK EXTENSION METHOD BASED ON LIMITED HARMONIC MEAN DEPTH
+        """
+        vsValues = [[index, float(current_vs[0]), float(current_vs[2])]
+                    for index, current_vs in enumerate(finalLayers)]
+        over_threshold = [index for index, _, value in vsValues if value >= self.vsLimit]
+
+        if len(over_threshold) == 0:
+            return finalLayers, correlationCoeffList
+
+        current_index = over_threshold[0]
+        current_remaining = finalLayers[current_index + 1:]
+
+        remaining_vs = 0
         while len(current_remaining) > 0 and remaining_vs < self.vsLimit:
             current_num = sum([value[0] for value in current_remaining])
             current_denom = sum([thickness/value for thickness, _, value in current_remaining])
@@ -609,10 +639,19 @@ class StochasticAnalyzer:
     def makeProfileColumn(self, finalLayers):
         existingDFSize = len(self._profileDF.columns)
         currentProfileName = "P{}".format(existingDFSize + 1)
+
+        # Writing input motions
         if self.inputFiles == 'Assign by ID':
             currentProfile = ["{}.txt".format(self._rawGroups['ID CODE'][0])]
         else:
             currentProfile = ["ALL"]
+
+        # Specifying bedrock velocity
+        if self.vsPolicy == 'Assign last velocity':
+            currentProfile.append(f"Bedrock Vs: {round(finalLayers[-1][-1], 1)}")
+        else:
+            currentProfile.append(f"Bedrock Vs: {round(self.vsLimit, 1)}")
+
         for element in finalLayers:
             currentProfile.append("{};{};{}".format(element[1], element[0], round(element[2], 1)))
 

@@ -9,6 +9,7 @@ from SRAmainGUI import Ui_MainWindow
 from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS
 import numpy as np
 import sys
+import platform
 import SRALibrary as SRALib
 import pandas as pd
 import os
@@ -18,7 +19,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
-NCVERSION = 0.91
+NCVERSION = 0.92
 
 
 def aboutMessage():
@@ -59,6 +60,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.assignWidgets()
         self.setDefault()
+        self.dialogOptions = self.get_system_options()
 
         # For testing
         print('NC92Soil GUI correctly loaded')
@@ -106,7 +108,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.checkBox_outBrief.stateChanged.connect(self.updateOutputInfo)
         self.checkBox_outRS.stateChanged.connect(self.updateOutputInfo)
         self.actionAbout.triggered.connect(aboutMessage)
-        # self.pushButton_loadBatch.clicked.connect(self.loadBatch)
+        self.pushButton_loadBatch.clicked.connect(self.loadBatch)
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
@@ -124,6 +126,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # elif self.sender() is self.checkBox_outRS:
         #     if not self.sender().isChecked():
         #         self.checkBox_outBrief.setChecked(False)
+
+    @staticmethod
+    def get_system_options():
+        if platform.system() == 'Darwin':
+            return QFileDialog.DontUseNativeDialog
+        else:
+            return QFileDialog.Options()
 
     def addRow(self, sender):
         if not sender:
@@ -353,7 +362,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
-                                                        filter='Text files (*.txt);;All files (*.*)')[0]
+                                                        filter='Text files (*.txt);;All files (*.*)',
+                                                        options=self.dialogOptions)[0]
         if len(timeHistoryFiles) == 0:
             return None
 
@@ -373,7 +383,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadSpectra(self):
         spectraFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
-                                                    filter='Text files (*.txt)')[0]
+                                                    filter='Text files (*.txt)',
+                                                    options=self.dialogOptions)[0]
         if len(spectraFiles) == 0:
             return None
         currentUnits = self.comboBox_SpectraUnits.currentText()
@@ -438,7 +449,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if batchAnalysis:
             outputFolder = batchOptions['outputFolder']
         else:
-            outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+            outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                            options=self.dialogOptions)
             if outputFolder == '':
                 return None
 
@@ -558,8 +570,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                         # newRow['Shallow soil name'] = newRow.astype('str')
                         newRow.loc[0] = risultato.values
                         newRow.index = [profileCode]
+                        # risultatiDict[currentOutput][currentEvent] = \
+                        #     risultatiDict[currentOutput][currentEvent].append(newRow.loc[profileCode])
                         risultatiDict[currentOutput][currentEvent] = \
-                            risultatiDict[currentOutput][currentEvent].append(newRow.loc[profileCode])
+                            pd.concat([risultatiDict[currentOutput][currentEvent],
+                                       newRow.loc[profileCode].to_frame().T])
                     else:
                         risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
 
@@ -653,7 +668,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadBatch(self):
         batchFile = QFileDialog.getOpenFileNames(self, caption="Choose the input batch file",
-                                                 filter='Excel Files (*.xlsx)')
+                                                 filter='Excel Files (*.xlsx)',
+                                                 options=self.dialogOptions)
         if len(batchFile[0]) == 0:
             return None
         else:
@@ -675,15 +691,17 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 waitBar.setValue(index + 1)
                 App.processEvents()
 
-        QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
+        QMessageBox.information(self, '', 'Batch input file has been correctly imported')
 
     def generatePermutatedProfiles(self):
         inputFile = QFileDialog.getOpenFileName(self, caption="Choose the input for cluster analysis",
-                                                filter='Excel Files (*.xlsx)')
+                                                filter='Excel Files (*.xlsx)',
+                                                options=self.dialogOptions)
         if inputFile[0] == "":
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files")
+        outputFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files",
+                                                        options=self.dialogOptions)
 
         if outputFolder == "":
             return None
@@ -722,13 +740,15 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         :return:
         """
         stochasticFile = QFileDialog.getOpenFileName(self, caption="Choose the input stochastic file",
-                                                     filter='Excel Files (*.xlsx)')
+                                                     filter='Excel Files (*.xlsx)',
+                                                     options=self.dialogOptions)
         if stochasticFile[0] == "":
             return None
         else:
             stochasticObject = StochasticAnalyzer(stochasticFile[0])
 
-        exportFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files")
+        exportFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files",
+                                                        options=self.dialogOptions)
 
         if exportFolder == "":
             return None
@@ -765,7 +785,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(QMessageBox(), "Check batch input", msg)
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
         if outputFolder == '':
             return None
 
@@ -874,7 +895,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                 for profileIndex in range(numberProfiles):
                     all_profile_counter += 1
-                    currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
+                    currentProfile, currentVsList, currentBedrockVs = batchObject.getProfileInfo(profileIndex)
 
                     currentMotions = [inputName
                                       for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
@@ -903,6 +924,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                             os.mkdir(currentFolder)
                         except FileExistsError:
                             pass
+
+                        # Updating bedrock Vs
+                        self.lineEdit_bedVelocity.setText(currentBedrockVs)
 
                         self.list2table(currentSoil, profileTable=currentProfile)
                         self.userModified = True
@@ -963,7 +987,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def generateNTC(self):
         coordinate_file = QFileDialog.getOpenFileName(self, caption='Choose the input file with site coordinates"',
-                                                      filter='Excel Files (*.xlsx)')[0]
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
 
         if len(coordinate_file) == 0:
             return None
@@ -977,7 +1002,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
         if outputFolder == '':
             return None
 
@@ -1009,19 +1035,23 @@ class SRAApp(QMainWindow, Ui_MainWindow):
     def makeStats(self):
         caller_obj = self.sender().objectName()
 
-        analysis_folder = QFileDialog.getExistingDirectory(self, 'Choose the folder containining the analysis output')
+        analysis_folder = QFileDialog.getExistingDirectory(self, 'Choose the folder containining the analysis output',
+                                                           options=self.dialogOptions)
         if analysis_folder == '':
             return None
 
         if caller_obj == 'actionGenerate_only_master':
             output_path = QFileDialog.getSaveFileName(self, caption='Choose the name of the merged report"',
-                                                      filter='Excel Files (*.xlsx)')[0]
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
             if output_path == "":
                 return None
 
             make_subs = False
         else:
-            output_path = QFileDialog.getExistingDirectory(self, 'Choose the folder where the reports will be saved')
+            output_path = QFileDialog.getExistingDirectory(self,
+                                                           'Choose the folder where the reports will be saved',
+                                                           options=self.dialogOptions)
             if output_path == '':
                 return None
             make_subs = True
