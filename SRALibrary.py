@@ -75,7 +75,7 @@ def drawProfile(profileList, asseGrafico, lineLength=0):
     uniqueNames = sorted(set([strato[2] for strato in profileList]))
     colorDict = dict()
     for indice, nome in enumerate(uniqueNames):
-        colorDict[nome] = colorList[indice]
+        colorDict[nome] = colorList[indice % len(colorList)]
 
     for strato in profileList:
         currentDepth = strato[0]
