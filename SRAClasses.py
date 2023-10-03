@@ -350,7 +350,9 @@ class StochasticAnalyzer:
 
         # Parse the Vs laws
         for index, vsLaw in enumerate(soil_sheet['Vs Law']):
-            vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
+            vsLaw = vsLaw.replace('^', '**') if isinstance(vsLaw, str) else vsLaw
+            # vsLawObject = sympy.sympify(vsLaw.replace('^', '**'))
+            vsLawObject = sympy.sympify(vsLaw)
             soil_sheet.loc[index, 'Vs Law'] = vsLawObject
 
         # new_sheet = pd.DataFrame(columns=soil_sheet.columns)
