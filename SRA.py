@@ -24,11 +24,9 @@ NCVERSION = 0.92
 
 def aboutMessage():
     Messaggio = QMessageBox()
-<<<<<<< Updated upstream
     Messaggio.setText(f"NC92-Soil\nversion {NCVERSION} beta\n"
                       "\nCNR IGAG")
     Messaggio.setWindowTitle(f"NC92-Soil rev {NCVERSION}")
-=======
     Messaggio.setText("Il software NC92Soil è stato realizzato dal CNR IGAG nell'ambito del contratto "
                       "concernente l’affidamento di servizi per il “Programma per il supporto al "
                       "rafforzamento della governance in materia di riduzione del rischio sismico e vulcanico "
@@ -36,7 +34,6 @@ def aboutMessage():
                       "\"CIG 6980737E65 – CUP J59G16000160006")
     Messaggio.setWindowTitle("NC92Soil 1.0")
     Messaggio.setFixedWidth(1200)
->>>>>>> Stashed changes
 
     try:
         mixer.init()
