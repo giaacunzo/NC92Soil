@@ -19,7 +19,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
-NCVERSION = 0.92
+NCVERSION = 0.93
 
 
 def aboutMessage():
@@ -68,6 +68,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.assignWidgets()
         self.setDefault()
         self.dialogOptions = self.get_system_options()
+        # self.dialogOptions = QFileDialog.Options()
 
         # For testing
         print('NC92Soil GUI correctly loaded')

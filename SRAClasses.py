@@ -681,7 +681,7 @@ class StochasticAnalyzer:
             # correlated bedrock
             layeredCopy = currentLayeredProfile.copy()
             layeredCopy.append(layeredCopy[-1])
-            profileLikeObj = [LayerLikeObj(layer) for layer in layeredCopy]
+            profileLikeObj = ProfileLikeObj([LayerLikeObj(layer) for layer in layeredCopy])
             toroVelModelObj = pysra.variation.ToroVelocityVariation.generic_model(genericModelName)
             currentCoeff = toroVelModelObj._calc_corr(profileLikeObj)[:-1]
 
@@ -756,6 +756,14 @@ class LayerLikeObj:
 
     def __init__(self, layerList):
         self.depth_mid = layerList[0]
+
+
+class ProfileLikeObj:
+    """
+    Simple class with depth mid attribute to be compatible with ToroVelocity class in Pysra
+    """
+    def __init__(self, layer_like_obj):
+        self.depth_mid = np.array([layer.depth_mid for layer in layer_like_obj])
 
 
 class GenericSoilVariator(pysra.variation.SoilTypeVariation):
