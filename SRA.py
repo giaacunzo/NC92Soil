@@ -88,8 +88,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.changeInputPanel()
 
         # Caricamento database curve di decadimento
+        curve_path = os.path.join(os.path.split(__file__)[0], 'CurveDB.xlsx')
         try:
-            self.curveDB = SRALib.degradationCurves('CurveDB.xlsx')
+            self.curveDB = SRALib.degradationCurves(curve_path)
         except FileNotFoundError:
             msg = "File CurveDB.xlsx has not been found in the program folder"
             QMessageBox.critical(QMessageBox(), "Check database", msg)
