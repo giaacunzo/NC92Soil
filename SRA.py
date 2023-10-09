@@ -6,7 +6,7 @@ filterwarnings('ignore', category=RuntimeWarning)
 from PySide6.QtWidgets import *
 from PySide6 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS, UHSCalculator
 import numpy as np
 import sys
 import platform
@@ -19,7 +19,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
-NCVERSION = 0.93
+NCVERSION = 0.94
 
 
 def aboutMessage():
@@ -67,8 +67,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.assignWidgets()
         self.setDefault()
-        self.dialogOptions = self.get_system_options()
-        # self.dialogOptions = QFileDialog.Options()
+        # self.dialogOptions = self.get_system_options()
+        self.dialogOptions = QFileDialog.Options()
 
         # For testing
         print('NC92Soil GUI correctly loaded')
@@ -121,6 +121,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
+        self.actionGenerate_UHS_spectra.triggered.connect(self.generateUHS)
         self.actionGenerate_only_master.triggered.connect(self.makeStats)
         self.actionGenerate_master_and_sub.triggered.connect(self.makeStats)
         self.actionLoadspectra.triggered.connect(self.loadSpectra)
@@ -1041,6 +1042,55 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         QMessageBox.information(QMessageBox(), 'OK', 'NTC spectra have been correctly saved')
 
+    def generateUHS(self):
+        """
+        Automatic generation of UHS response spectra
+        """
+        coordinate_file = QFileDialog.getOpenFileName(self, caption='Choose the input file with site coordinates"',
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
+
+        if len(coordinate_file) == 0:
+            return None
+
+        percentile_list = ['50', '16', '84']
+        selection, ok = QInputDialog.getItem(self, "Percentile",
+                                             "Choose the desired percentile", percentile_list, 0, False)
+
+        if ok:
+            percentile = str(selection)
+        else:
+            return None
+
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
+        if outputFolder == '':
+            return None
+
+        mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}). \
+            dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
+
+        UHSObj = UHSCalculator('UHS_SA_0475.xls', percentile=percentile)
+
+        number_rows = len(mops_coord)
+        waitBar = QProgressDialog("Generating {} UHS spectra ({}th percentile)..".
+                                  format(number_rows, percentile), "Cancel", 0, number_rows)
+        waitBar.setWindowTitle('NC92-Soil spectra generator')
+        waitBar.setValue(0)
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        for index, row in mops_coord.iterrows():
+            waitBar.setLabelText('Spectrum for {} ({} of {})'.format(row['ID CODE'], index + 1, number_rows))
+            App.processEvents()
+            current_spectrum = UHSObj.get_values(row['Lon'], row['Lat'])
+            current_file = os.path.join(outputFolder, "{}.txt".format(row['ID CODE']))
+            np.savetxt(fname=current_file, X=current_spectrum, fmt='%f\t%f')
+            waitBar.setValue(index + 1)
+            App.processEvents()
+
+        QMessageBox.information(QMessageBox(), 'OK', 'UHS spectra have been correctly saved')
     def makeStats(self):
         caller_obj = self.sender().objectName()
 

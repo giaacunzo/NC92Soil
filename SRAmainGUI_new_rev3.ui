@@ -1250,6 +1250,7 @@
     <addaction name="separator"/>
     <addaction name="actionGeneratePermutated"/>
     <addaction name="actionGenerate_NTC"/>
+    <addaction name="actionGenerate_UHS_spectra"/>
     <addaction name="separator"/>
     <addaction name="menuMerge_and_make_stats"/>
    </widget>
@@ -1310,6 +1311,11 @@
    </property>
    <property name="text">
     <string>Run batch analysis</string>
+   </property>
+  </action>
+  <action name="actionGenerate_UHS_spectra">
+   <property name="text">
+    <string>Generate UHS spectra</string>
    </property>
   </action>
  </widget>

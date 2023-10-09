@@ -1223,3 +1223,35 @@ class NTCCalculator:
                 RS.append(ag * S * eta * F0 * (Tc * Td / periodo ** 2))
 
         return np.vstack((TT, RS)).transpose()
+
+
+class UHSCalculator:
+
+    def __init__(self, database_name, percentile='50'):
+        current_sheet = f"SA_475_{percentile}percentile"
+        self.database = pd.read_excel(database_name, sheet_name=current_sheet)
+
+    def get_values(self, lon, lat):
+        UHSDatabase = self.database
+        distanceVect = [((lon - float(row['Lon'])) ** 2 + (lat - float(row['Lat'])) ** 2) ** 0.5
+                        for _, row in UHSDatabase.iterrows()]
+        UHSDatabase['Distance'] = distanceVect
+        currentPoints = UHSDatabase.sort_values('Distance').iloc[:4, :]
+
+        inv_distance = currentPoints['Distance'].values ** -1
+
+        numeric_data = currentPoints.iloc[:, 3:-1]
+        numeric_data = numeric_data.apply(lambda column: sum(np.multiply(column, inv_distance)) / sum(inv_distance))
+
+        TT = [float(name.split('_')[-1]) for name in numeric_data.index]
+
+        # Adding 0.01 period to prevent further numeric errors
+        slope = np.diff(numeric_data.values[:2]) / np.diff(TT[:2])
+        intercept = numeric_data.values[0] - slope * TT[0]
+
+        SA_001 = slope * 0.01 + intercept
+
+        TT.insert(0, 0.01)
+        numeric_data = np.append(SA_001, numeric_data)
+
+        return np.column_stack((TT, numeric_data))
