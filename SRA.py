@@ -19,7 +19,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
-NCVERSION = 0.94
+NCVERSION = 0.95
 
 
 def aboutMessage():

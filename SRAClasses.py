@@ -1229,10 +1229,11 @@ class UHSCalculator:
 
     def __init__(self, database_name, percentile='50'):
         current_sheet = f"SA_475_{percentile}percentile"
-        self.database = pd.read_excel(database_name, sheet_name=current_sheet)
+        self.UHSdatabase = pd.read_excel(database_name, sheet_name=current_sheet)
+        self.NTCCalculator = NTCCalculator('NTC2008.csv')
 
     def get_values(self, lon, lat):
-        UHSDatabase = self.database
+        UHSDatabase = self.UHSdatabase
         distanceVect = [((lon - float(row['Lon'])) ** 2 + (lat - float(row['Lat'])) ** 2) ** 0.5
                         for _, row in UHSDatabase.iterrows()]
         UHSDatabase['Distance'] = distanceVect
@@ -1245,11 +1246,9 @@ class UHSCalculator:
 
         TT = [float(name.split('_')[-1]) for name in numeric_data.index]
 
-        # Adding 0.01 period to prevent further numeric errors
-        slope = np.diff(numeric_data.values[:2]) / np.diff(TT[:2])
-        intercept = numeric_data.values[0] - slope * TT[0]
+        # Adding pga value to 0.01 period to prevent further numeric errors
 
-        SA_001 = slope * 0.01 + intercept
+        SA_001, _, _ = self.NTCCalculator.agNTC(lon=lon, lat=lat)
 
         TT.insert(0, 0.01)
         numeric_data = np.append(SA_001, numeric_data)
