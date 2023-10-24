@@ -37,7 +37,7 @@ def aboutMessage():
 
     try:
         mixer.init()
-        mixer.music.load('about.mp3')
+        mixer.music.load('Resources/about.mp3')
         mixer.music.play()
         mixer.music.set_volume(0.3)
     # except pygameexception:
@@ -88,7 +88,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.changeInputPanel()
 
         # Caricamento database curve di decadimento
-        curve_path = os.path.join(os.path.split(__file__)[0], 'CurveDB.xlsx')
+        curve_path = os.path.join(os.path.split(__file__)[0], 'Resources/CurveDB.xlsx')
         try:
             self.curveDB = SRALib.degradationCurves(curve_path)
         except FileNotFoundError:
@@ -1019,7 +1019,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}).\
             dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
-        A = NTCCalculator('NTC2008.csv')
+        A = NTCCalculator('Resources/NTC2008.csv')
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
@@ -1070,7 +1070,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}). \
             dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
 
-        UHSObj = UHSCalculator('UHS_SA_0475.xls', percentile=percentile)
+        UHSObj = UHSCalculator('Resources/UHS_SA_0475.xls', percentile=percentile)
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} UHS spectra ({}th percentile)..".

@@ -1230,7 +1230,7 @@ class UHSCalculator:
     def __init__(self, database_name, percentile='50'):
         current_sheet = f"SA_475_{percentile}percentile"
         self.UHSdatabase = pd.read_excel(database_name, sheet_name=current_sheet)
-        self.NTCCalculator = NTCCalculator('NTC2008.csv')
+        self.NTCCalculator = NTCCalculator('Resources/NTC2008.csv')
 
     def get_values(self, lon, lat):
         UHSDatabase = self.UHSdatabase
