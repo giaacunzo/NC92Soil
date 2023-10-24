@@ -37,7 +37,7 @@ def aboutMessage():
 
     try:
         mixer.init()
-        mixer.music.load('Resources/about.mp3')
+        mixer.music.load(os.path.join(os.path.split(__file__)[0], 'Resources/about.mp3'))
         mixer.music.play()
         mixer.music.set_volume(0.3)
     # except pygameexception:
@@ -1019,7 +1019,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}).\
             dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
-        A = NTCCalculator('Resources/NTC2008.csv')
+        A = NTCCalculator(os.path.join(os.path.split(__file__)[0], 'Resources/NTC2008.csv'))
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
@@ -1070,7 +1070,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}). \
             dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
 
-        UHSObj = UHSCalculator('Resources/UHS_SA_0475.xls', percentile=percentile)
+        UHSObj = UHSCalculator(os.path.join(os.path.split(__file__)[0], 'Resources/UHS_SA_0475.xls'),
+                               percentile=percentile)
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} UHS spectra ({}th percentile)..".
