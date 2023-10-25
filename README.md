@@ -1,7 +1,7 @@
 # NC92Soil
 ### A computer code for deterministic and stochastic 1D equivalent linear seismic site response analyses
 
-![Version](https://img.shields.io/badge/Version%20-%200.2%20-%20Green)
+[![Version](https://img.shields.io/badge/Version%20-%200.2%20-%20Green)](https://github.com/giaacunzo/NC92Soil/releases/tag/v.0.2)
 ![GitHub last commit (branch)](https://img.shields.io/github/last-commit/giaacunzo/NC92Soil/feature%2Fnew-gui-and-bedrock-extension)
 ![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/giaacunzo/NC92Soil)
 [![DOI](https://img.shields.io/badge/DOI%20-%2010.1016%2Fj.compgeo.2023.105857%20-%20blue)](https://doi.org/10.1016/j.compgeo.2023.105857)
