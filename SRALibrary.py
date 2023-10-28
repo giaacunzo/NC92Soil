@@ -75,7 +75,7 @@ def drawProfile(profileList, asseGrafico, lineLength=0):
     uniqueNames = sorted(set([strato[2] for strato in profileList]))
     colorDict = dict()
     for indice, nome in enumerate(uniqueNames):
-        colorDict[nome] = colorList[indice]
+        colorDict[nome] = colorList[indice % len(colorList)]
 
     for strato in profileList:
         currentDepth = strato[0]
@@ -553,7 +553,8 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
                         if new_df.empty:
                             new_df = currentBriefReport
                         else:
-                            new_df = new_df.append(currentBriefReport)
+                            # new_df = new_df.append(currentBriefReport)
+                            new_df = pd.concat([new_df, currentBriefReport])
 
         # Computing stats
         stats_row = pd.DataFrame(index=[0])
@@ -579,9 +580,11 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
 
         # Adding stats to current report and to master report
 
-        new_df = new_df.append(pd.Series(), ignore_index=True)
-        new_df = new_df.append(stats_row)
-        master_df = master_df.append(stats_row)
+        # new_df = new_df.append(pd.Series(), ignore_index=True)
+        # new_df = new_df.append(stats_row)
+        new_df = pd.concat([new_df, stats_row])
+        # master_df = master_df.append(stats_row)
+        master_df = pd.concat([master_df, stats_row])
 
         if make_subs:
             currentFileName = current_ID + '.xlsx'

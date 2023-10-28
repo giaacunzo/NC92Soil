@@ -3,12 +3,13 @@ from warnings import filterwarnings
 filterwarnings('ignore', category=UserWarning)
 filterwarnings('ignore', category=RuntimeWarning)
 
-from PySide2.QtWidgets import *
-from PySide2 import QtCore
+from PySide6.QtWidgets import *
+from PySide6 import QtCore
 from SRAmainGUI import Ui_MainWindow
-from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS
+from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS, UHSCalculator
 import numpy as np
 import sys
+import platform
 import SRALibrary as SRALib
 import pandas as pd
 import os
@@ -18,15 +19,25 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 from pygame import mixer, error as pygameexception
 
 
+NCVERSION = 0.95
+
+
 def aboutMessage():
     Messaggio = QMessageBox()
-    Messaggio.setText("NC92-Soil\nversion 0.9 beta\n"
+    Messaggio.setText(f"NC92-Soil\nversion {NCVERSION} beta\n"
                       "\nCNR IGAG")
-    Messaggio.setWindowTitle("NC92-Soil rev 15")
+    Messaggio.setWindowTitle(f"NC92-Soil rev {NCVERSION}")
+    Messaggio.setText("Il software NC92Soil è stato realizzato dal CNR IGAG nell'ambito del contratto "
+                      "concernente l’affidamento di servizi per il “Programma per il supporto al "
+                      "rafforzamento della governance in materia di riduzione del rischio sismico e vulcanico "
+                      "ai fini di protezione civile nell’ambito del Pon Governance e Capacità Istituzionale 2014-2020"
+                      "\"CIG 6980737E65 – CUP J59G16000160006")
+    Messaggio.setWindowTitle("NC92Soil 1.0")
+    Messaggio.setFixedWidth(1200)
 
     try:
         mixer.init()
-        mixer.music.load('about.mp3')
+        mixer.music.load(os.path.join(os.path.split(__file__)[0], 'Resources/about.mp3'))
         mixer.music.play()
         mixer.music.set_volume(0.3)
     # except pygameexception:
@@ -56,6 +67,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.assignWidgets()
         self.setDefault()
+        # self.dialogOptions = self.get_system_options()
+        self.dialogOptions = QFileDialog.Options()
 
         # For testing
         print('NC92Soil GUI correctly loaded')
@@ -70,11 +83,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.tableWidget_Soil.horizontalHeader().setStretchLastSection(True)
         self.tableWidget_Profile.resizeColumnsToContents()
         self.tableWidget_Profile.horizontalHeader().setStretchLastSection(True)
+        self.tableWidget_Permutations.setVisible(False)
+        self.pushButton_loadBatch.setVisible(False)
         self.changeInputPanel()
 
         # Caricamento database curve di decadimento
+        curve_path = os.path.join(os.path.split(__file__)[0], 'Resources/CurveDB.xlsx')
         try:
-            self.curveDB = SRALib.degradationCurves('CurveDB.xlsx')
+            self.curveDB = SRALib.degradationCurves(curve_path)
         except FileNotFoundError:
             msg = "File CurveDB.xlsx has not been found in the program folder"
             QMessageBox.critical(QMessageBox(), "Check database", msg)
@@ -105,6 +121,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.actionGenerateStochastic.triggered.connect(self.loadStochastic)
         self.actionGeneratePermutated.triggered.connect(self.generatePermutatedProfiles)
         self.actionGenerate_NTC.triggered.connect(self.generateNTC)
+        self.actionGenerate_UHS_spectra.triggered.connect(self.generateUHS)
         self.actionGenerate_only_master.triggered.connect(self.makeStats)
         self.actionGenerate_master_and_sub.triggered.connect(self.makeStats)
         self.actionLoadspectra.triggered.connect(self.loadSpectra)
@@ -119,6 +136,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         # elif self.sender() is self.checkBox_outRS:
         #     if not self.sender().isChecked():
         #         self.checkBox_outBrief.setChecked(False)
+
+    @staticmethod
+    def get_system_options():
+        if platform.system() == 'Darwin':
+            return QFileDialog.DontUseNativeDialog
+        else:
+            return QFileDialog.Options()
 
     def addRow(self, sender):
         if not sender:
@@ -348,7 +372,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadTH(self):
         timeHistoryFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
-                                                        filter='Text files (*.txt);;All files (*.*)')[0]
+                                                        filter='Text files (*.txt);;All files (*.*)',
+                                                        options=self.dialogOptions)[0]
         if len(timeHistoryFiles) == 0:
             return None
 
@@ -368,7 +393,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadSpectra(self):
         spectraFiles = QFileDialog.getOpenFileNames(self, caption='Choose input motion files"',
-                                                    filter='Text files (*.txt)')[0]
+                                                    filter='Text files (*.txt)',
+                                                    options=self.dialogOptions)[0]
         if len(spectraFiles) == 0:
             return None
         currentUnits = self.comboBox_SpectraUnits.currentText()
@@ -433,7 +459,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         if batchAnalysis:
             outputFolder = batchOptions['outputFolder']
         else:
-            outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+            outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                            options=self.dialogOptions)
             if outputFolder == '':
                 return None
 
@@ -553,8 +580,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                         # newRow['Shallow soil name'] = newRow.astype('str')
                         newRow.loc[0] = risultato.values
                         newRow.index = [profileCode]
+                        # risultatiDict[currentOutput][currentEvent] = \
+                        #     risultatiDict[currentOutput][currentEvent].append(newRow.loc[profileCode])
                         risultatiDict[currentOutput][currentEvent] = \
-                            risultatiDict[currentOutput][currentEvent].append(newRow.loc[profileCode])
+                            pd.concat([risultatiDict[currentOutput][currentEvent],
+                                       newRow.loc[profileCode].to_frame().T])
                     else:
                         risultatiDict[currentOutput][currentEvent][profileCode] = currentDF[1].values
 
@@ -648,7 +678,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def loadBatch(self):
         batchFile = QFileDialog.getOpenFileNames(self, caption="Choose the input batch file",
-                                                 filter='Excel Files (*.xlsx)')
+                                                 filter='Excel Files (*.xlsx)',
+                                                 options=self.dialogOptions)
         if len(batchFile[0]) == 0:
             return None
         else:
@@ -670,15 +701,17 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                 waitBar.setValue(index + 1)
                 App.processEvents()
 
-        QMessageBox.information(QMessageBox(), 'OK', 'Batch input file has been correctly imported')
+        QMessageBox.information(self, '', 'Batch input file has been correctly imported')
 
     def generatePermutatedProfiles(self):
         inputFile = QFileDialog.getOpenFileName(self, caption="Choose the input for cluster analysis",
-                                                filter='Excel Files (*.xlsx)')
+                                                filter='Excel Files (*.xlsx)',
+                                                options=self.dialogOptions)
         if inputFile[0] == "":
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files")
+        outputFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files",
+                                                        options=self.dialogOptions)
 
         if outputFolder == "":
             return None
@@ -717,13 +750,15 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         :return:
         """
         stochasticFile = QFileDialog.getOpenFileName(self, caption="Choose the input stochastic file",
-                                                     filter='Excel Files (*.xlsx)')
+                                                     filter='Excel Files (*.xlsx)',
+                                                     options=self.dialogOptions)
         if stochasticFile[0] == "":
             return None
         else:
             stochasticObject = StochasticAnalyzer(stochasticFile[0])
 
-        exportFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files")
+        exportFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files",
+                                                        options=self.dialogOptions)
 
         if exportFolder == "":
             return None
@@ -760,7 +795,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(QMessageBox(), "Check batch input", msg)
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
         if outputFolder == '':
             return None
 
@@ -869,7 +905,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
                 for profileIndex in range(numberProfiles):
                     all_profile_counter += 1
-                    currentProfile, currentVsList = batchObject.getProfileInfo(profileIndex)
+                    currentProfile, currentVsList, currentBedrockVs = batchObject.getProfileInfo(profileIndex)
 
                     currentMotions = [inputName
                                       for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
@@ -898,6 +934,9 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                             os.mkdir(currentFolder)
                         except FileExistsError:
                             pass
+
+                        # Updating bedrock Vs
+                        self.lineEdit_bedVelocity.setText(currentBedrockVs)
 
                         self.list2table(currentSoil, profileTable=currentProfile)
                         self.userModified = True
@@ -958,7 +997,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
     def generateNTC(self):
         coordinate_file = QFileDialog.getOpenFileName(self, caption='Choose the input file with site coordinates"',
-                                                      filter='Excel Files (*.xlsx)')[0]
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
 
         if len(coordinate_file) == 0:
             return None
@@ -972,13 +1012,14 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             return None
 
-        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation')
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
         if outputFolder == '':
             return None
 
         mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}).\
             dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
-        A = NTCCalculator('NTC2008.csv')
+        A = NTCCalculator(os.path.join(os.path.split(__file__)[0], 'Resources/NTC2008.csv'))
 
         number_rows = len(mops_coord)
         waitBar = QProgressDialog("Generating {} NTC spectra with a return period of {} years..".
@@ -1001,22 +1042,76 @@ class SRAApp(QMainWindow, Ui_MainWindow):
 
         QMessageBox.information(QMessageBox(), 'OK', 'NTC spectra have been correctly saved')
 
+    def generateUHS(self):
+        """
+        Automatic generation of UHS response spectra
+        """
+        coordinate_file = QFileDialog.getOpenFileName(self, caption='Choose the input file with site coordinates"',
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
+
+        if len(coordinate_file) == 0:
+            return None
+
+        percentile_list = ['50', '16', '84']
+        selection, ok = QInputDialog.getItem(self, "Percentile",
+                                             "Choose the desired percentile", percentile_list, 0, False)
+
+        if ok:
+            percentile = str(selection)
+        else:
+            return None
+
+        outputFolder = QFileDialog.getExistingDirectory(self, 'Choose a folder for output generation',
+                                                        options=self.dialogOptions)
+        if outputFolder == '':
+            return None
+
+        mops_coord = pd.read_excel(coordinate_file, sheet_name='Stochastic', dtype={'ID CODE': str}). \
+            dropna(axis=0, subset=['Lon']).drop_duplicates(subset='ID CODE').reset_index()
+
+        UHSObj = UHSCalculator(os.path.join(os.path.split(__file__)[0], 'Resources/UHS_SA_0475.xls'),
+                               percentile=percentile)
+
+        number_rows = len(mops_coord)
+        waitBar = QProgressDialog("Generating {} UHS spectra ({}th percentile)..".
+                                  format(number_rows, percentile), "Cancel", 0, number_rows)
+        waitBar.setWindowTitle('NC92-Soil spectra generator')
+        waitBar.setValue(0)
+        waitBar.setMinimumDuration(0)
+        waitBar.show()
+        App.processEvents()
+
+        for index, row in mops_coord.iterrows():
+            waitBar.setLabelText('Spectrum for {} ({} of {})'.format(row['ID CODE'], index + 1, number_rows))
+            App.processEvents()
+            current_spectrum = UHSObj.get_values(row['Lon'], row['Lat'])
+            current_file = os.path.join(outputFolder, "{}.txt".format(row['ID CODE']))
+            np.savetxt(fname=current_file, X=current_spectrum, fmt='%f\t%f')
+            waitBar.setValue(index + 1)
+            App.processEvents()
+
+        QMessageBox.information(QMessageBox(), 'OK', 'UHS spectra have been correctly saved')
     def makeStats(self):
         caller_obj = self.sender().objectName()
 
-        analysis_folder = QFileDialog.getExistingDirectory(self, 'Choose the folder containining the analysis output')
+        analysis_folder = QFileDialog.getExistingDirectory(self, 'Choose the folder containining the analysis output',
+                                                           options=self.dialogOptions)
         if analysis_folder == '':
             return None
 
         if caller_obj == 'actionGenerate_only_master':
             output_path = QFileDialog.getSaveFileName(self, caption='Choose the name of the merged report"',
-                                                      filter='Excel Files (*.xlsx)')[0]
+                                                      filter='Excel Files (*.xlsx)',
+                                                      options=self.dialogOptions)[0]
             if output_path == "":
                 return None
 
             make_subs = False
         else:
-            output_path = QFileDialog.getExistingDirectory(self, 'Choose the folder where the reports will be saved')
+            output_path = QFileDialog.getExistingDirectory(self,
+                                                           'Choose the folder where the reports will be saved',
+                                                           options=self.dialogOptions)
             if output_path == '':
                 return None
             make_subs = True
