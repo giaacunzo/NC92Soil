@@ -1107,6 +1107,9 @@ class NTCCalculator:
         NTCDatabase['Distance'] = distanceVect
         currentPoints = NTCDatabase.sort_values('Distance').iloc[:4, :]
 
+        # Replacing zero distance if any points lies on the grid
+        currentPoints['Distance'] = currentPoints['Distance'].apply(lambda x: x if x != 0 else 1e-9)
+
         close_ag = currentPoints["{}_ag".format(tr)].values
         close_F0 = currentPoints["{}_F0".format(tr)].values
         close_Tc = currentPoints["{}_Tc".format(tr)].values
@@ -1125,14 +1128,14 @@ class NTCCalculator:
         Calcola il coefficiente di sottosuolo a partire dalla categoria e dal valore del fattore di amplificazione
 
         INPUT
-        Cat:    Categoria di sottosuolo (da 'A' a 'E')
-        ag:     Valore dell'accelerazione attesa al sito (in g)
-        F0:     Fattore di amplificazione relativo al sito e al Tr
+        Cat: Categoria di sottosuolo (da 'A' a 'E')
+        ag: Valore dell'accelerazione attesa al sito (in g)
+        F0: Fattore di amplificazione relativo al sito e al Tr
         Tcstar: Periodo Tc* di normativa
 
         OUTPUT
-        Ss:     Coefficiente di sottosuolo 1
-        Cc:     Coefficiente di sottosuolo 2
+        Ss: Coefficiente di sottosuolo 1
+        Cc: Coefficiente di sottosuolo 2
         """
 
         if Cat == 'A':
@@ -1238,6 +1241,9 @@ class UHSCalculator:
                         for _, row in UHSDatabase.iterrows()]
         UHSDatabase['Distance'] = distanceVect
         currentPoints = UHSDatabase.sort_values('Distance').iloc[:4, :]
+
+        # Replacing zero distance if any points lies on the grid
+        currentPoints['Distance'] = currentPoints['Distance'].apply(lambda x: x if x != 0 else 1e-9)
 
         inv_distance = currentPoints['Distance'].values ** -1
 
