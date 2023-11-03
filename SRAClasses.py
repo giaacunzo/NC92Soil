@@ -329,6 +329,42 @@ class StochasticAnalyzer:
 
         np.random.seed(self.randomSeed)
 
+    def check_input_file(self):
+        # Checking for all soils to be defined in Soils sheet
+        all_groups = set(self._allData['Group name'])
+        unique_soils = set([element.split('[')[0] for element in self._allSoils['Group name']])
+        not_found_soils = list()
+        for group in all_groups:
+            current_soils = [element.strip() for element in group.split(',')]
+            not_found_soils.extend([element for element in current_soils
+                                    if element != "" and element not in unique_soils])
+        not_found_soils = list(set(not_found_soils))
+
+        # Checking for all soils to have minimum and maximum thickness
+        not_defined_thickness = self._allSoils[(self._allSoils['Min thickness\n[m]'].astype(str).str.strip() == '') |
+                                               (self._allSoils['Max thickness\n[m]'].astype(str).str.strip() == '')]\
+            ['Orig name']
+
+        not_defined_thickness = list(not_defined_thickness.values)
+
+        # Checking for all soils to be continuously defined
+        grouped_soils = self._allSoils.groupby(by='Orig name')
+        discontinuous_soils = []
+        for soil, frame in grouped_soils:
+            expected_lower_bound = 0
+            for index, row in frame.reset_index().iterrows():
+                if row['From\n[m]'] == expected_lower_bound:
+                    expected_lower_bound = row['To\n[m]']
+                else:
+                    discontinuous_soils.append(row['Orig name'])
+                    break
+
+                if index == len(frame) - 1 and row['To\n[m]'] != INF_DEPTH:
+                    discontinuous_soils.append(row['Orig name'])
+                    break
+
+        return not_found_soils, not_defined_thickness, discontinuous_soils
+
     @staticmethod
     def make_unique_list(orig_list):
         unique_list = list()
@@ -474,8 +510,12 @@ class StochasticAnalyzer:
                         group['Bedrock extension'].lower() == 'y':  # Bedrock extension
 
                     groupThickness = self.maxDepth - totalDepth
-                    VsMin = np.nan
-                    VsMax = np.nan
+                    # VsMin = np.nan
+                    # VsMax = np.nan
+
+                    # Considering defined max and minimum values in bedrock extension
+                    VsMin = group['Vs min\n[m/s]']
+                    VsMax = group['Vs max\n[m/s]']
 
                     bedrock_extended = True
                 else:  # Extract a random thickness as usual

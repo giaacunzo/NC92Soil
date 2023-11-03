@@ -757,6 +757,25 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             stochasticObject = StochasticAnalyzer(stochasticFile[0])
 
+        # Checking input file
+        not_found_soils, not_defined_thickness, discontinuous_soils = stochasticObject.check_input_file()
+
+        check_input_string = ''
+        if len(not_found_soils) > 0:
+            check_input_string = (f"{check_input_string}The following soils have not been defined in Group "
+                                  f"definitions:\n{', '.join(not_found_soils)}\n\n")
+        if len(not_defined_thickness) > 0:
+            check_input_string = (f"{check_input_string}Thickness bounds missing in Group definitions for "
+                                  f"the following soils:\n{', '.join(not_defined_thickness)}\n\n")
+
+        if len(discontinuous_soils) > 0:
+            check_input_string = (f"{check_input_string}Discontinuous properties defined in Group definitions "
+                                  f"for the following soils:\n{', '.join(discontinuous_soils)}")
+
+        if check_input_string != '':
+            QMessageBox.critical(self, 'Input check', check_input_string)
+            return None
+
         exportFolder = QFileDialog.getExistingDirectory(self, caption="Choose the output folder for batch files",
                                                         options=self.dialogOptions)
 
