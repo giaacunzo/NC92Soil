@@ -42,3 +42,7 @@ Computers and Geotechnics, Volume 165, 2024, 105857, ISSN 0266-352X,
 This README is currently under construction. We will update this document with more details about the project in the near future. Thank you for your patience!
 
 For further information or to contribute to the project, please contact [gianluca.acunzo@thetagroup.it](mailto:gianluca.acunzo@thetagroup.it).
+
+## Credits
+
+This software is developed and mantained by [Theta Group Srls](https://www.thetagroup.it) and [CNR IGAG](https://www.igag.cnr.it) 
