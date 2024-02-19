@@ -307,7 +307,8 @@ class StochasticAnalyzer:
         self.harmonicMeanDepth = int(currentStochastic['Harmonic mean depth\n[m]'][0])
 
         # Check of random seed
-        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0], float):
+        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0],
+                                                                           (int, np.int64, np.int32)):
             self.randomSeed = None
         else:
             self.randomSeed = int(currentStochastic['Random seed'][0])
