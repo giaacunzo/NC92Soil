@@ -616,7 +616,7 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
     saving_path = os.path.join(final_path, 'Master report.xlsx') if make_subs else final_path
 
     try:
-        master_df.to_excel(saving_path, index=False, header=rename_dict.values)
+        master_df.drop('Event', axis=1).to_excel(saving_path, index=False, header=rename_dict.values)
         waitBar.setValue(subfolder_num)
         return 0
     except PermissionError:
