@@ -1139,7 +1139,7 @@ class NTCCalculator:
 
         lon: Longitudine del sito
         lat: Latitudine del sito
-        tr:  Tempo di ritorno dell'azione sismica
+        tr: Tempo di ritorno dell'azione sismica
         """
 
         NTCDatabase = self.NTCDatabase

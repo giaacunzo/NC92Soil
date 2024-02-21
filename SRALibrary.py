@@ -560,7 +560,7 @@ def makeStats(analysis_path, final_path, make_subs, waitBar=None, App=None):
         stats_row = pd.DataFrame(index=[0])
         for colonna in new_df.columns:
             if colonna.lower() == 'analysis id':
-                stats_row[colonna] = '-'.join(new_df[colonna].values[0].split('-')[:-1])
+                stats_row[colonna] = '/'.join(new_df[colonna].values[0].split('/')[:-1])
             else:
                 try:
                     # if colonna.startswith('PG') or colonna.startswith('H'):
