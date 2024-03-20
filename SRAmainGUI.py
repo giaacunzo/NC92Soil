@@ -29,7 +29,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1512, 828)
+        MainWindow.resize(1551, 828)
         self.actionAbout = QAction(MainWindow)
         self.actionAbout.setObjectName(u"actionAbout")
         self.actionGenerateStochastic = QAction(MainWindow)
@@ -563,6 +563,12 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_analysis_type.addWidget(self.checkBox_updatePlots)
 
+        self.checkBox_multithread = QCheckBox(self.centralwidget)
+        self.checkBox_multithread.setObjectName(u"checkBox_multithread")
+        self.checkBox_multithread.setEnabled(False)
+
+        self.horizontalLayout_analysis_type.addWidget(self.checkBox_multithread)
+
         self.horizontalSpacer_8 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         self.horizontalLayout_analysis_type.addItem(self.horizontalSpacer_8)
@@ -767,7 +773,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 1512, 24))
+        self.menubar.setGeometry(QRect(0, 0, 1551, 37))
         self.menu = QMenu(self.menubar)
         self.menu.setObjectName(u"menu")
         self.menuTools = QMenu(self.menubar)
@@ -900,6 +906,7 @@ class Ui_MainWindow(object):
         self.comboBox_analysisType.setItemText(2, QCoreApplication.translate("MainWindow", u"Batch analysis", None))
 
         self.checkBox_updatePlots.setText(QCoreApplication.translate("MainWindow", u"Update plot (batch only)", None))
+        self.checkBox_multithread.setText(QCoreApplication.translate("MainWindow", u"Multithread (beta)", None))
         self.label_18.setText(QCoreApplication.translate("MainWindow", u"Brick size [m]", None))
         self.lineEdit_brickSize.setText(QCoreApplication.translate("MainWindow", u"3", None))
         self.label_25.setText(QCoreApplication.translate("MainWindow", u"Bedrock depth [m]", None))

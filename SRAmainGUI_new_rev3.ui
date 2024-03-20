@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1512</width>
+    <width>1551</width>
     <height>828</height>
    </rect>
   </property>
@@ -873,6 +873,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="checkBox_multithread">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Multithread (beta)</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer_8">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -1225,8 +1235,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1512</width>
-     <height>24</height>
+     <width>1551</width>
+     <height>37</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu">

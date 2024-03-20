@@ -7,6 +7,8 @@ from PySide6.QtWidgets import *
 from PySide6 import QtCore
 from SRAmainGUI import Ui_MainWindow
 from SRAClasses import BatchAnalyzer, StochasticAnalyzer, NTCCalculator, ClusterToMOPS, UHSCalculator
+from concurrent.futures import ThreadPoolExecutor
+import threading
 import numpy as np
 import sys
 import platform
@@ -63,6 +65,8 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.userModified = True
         self.inputMotion = dict()
         self.batchObject = list()
+        self.shared_executor_counter = 0
+        self.lock = None
 
         self.setupUi(self)
         self.assignWidgets()
@@ -285,6 +289,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.pushButton_drawProfile.show()
             self.pushButton_loadBatch.hide()
             self.checkBox_updatePlots.setEnabled(False)
+            self.checkBox_multithread.setEnabled(False)
 
             for element in buttonList:
                 getattr(self, element).setEnabled(True)
@@ -310,6 +315,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.pushButton_drawProfile.show()
             self.pushButton_loadBatch.hide()
             self.checkBox_updatePlots.setEnabled(False)
+            self.checkBox_multithread.setEnabled(False)
 
             for element in buttonList:
                 getattr(self, element).setEnabled(True)
@@ -335,6 +341,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             self.pushButton_drawProfile.hide()
             self.pushButton_loadBatch.show()
             self.checkBox_updatePlots.setEnabled(True)
+            self.checkBox_multithread.setEnabled(True)
 
             for element in buttonList:
                 getattr(self, element).setEnabled(False)
@@ -429,7 +436,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         self.comboBox_spectraList.setCurrentIndex(0)
         self.comboBox_spectraList.setEnabled(True)
 
-    def runAnalysis(self, batchAnalysis=False, batchOptions=None):
+    def runAnalysis(self, batchAnalysis=False, batchOptions=None, single_thread=True, other_data=[]):
         if self.checkBox_autoDiscretize.isChecked():
             currentMaxFreq = float(self.lineEdit_maxFreq.text())
             currentWaveLength = float(self.lineEdit_waveLength.text())
@@ -437,8 +444,13 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             currentMaxFreq = currentWaveLength = -1
 
         analysisType = self.comboBox_analysisType.currentText()
-        soilList, profileList, permutationList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile,
-                                                                   self.tableWidget_Permutations)
+        if single_thread:
+            soilList, profileList, permutationList = SRALib.table2list(self.tableWidget_Soil, self.tableWidget_Profile,
+                                                                       self.tableWidget_Permutations)
+        else:
+            soilList, profileList = other_data
+            permutationList = []
+
         outputList = [self.checkBox_outRS.isChecked(), self.checkBox_outAcc.isChecked(),
                       self.checkBox_outStrain.isChecked(), self.checkBox_outBrief.isChecked(),
                       self.checkBox_Fourier.isChecked()]
@@ -447,9 +459,11 @@ class SRAApp(QMainWindow, Ui_MainWindow):
                                  self.lineEdit_briefDepth, self.lineEdit_FourierDepth]]
         LECalcOptions = [float(x.text())
                          for x in [self.lineEdit_strainRatio, self.lineEdit_maxTol, self.lineEdit_maxIter]]
-        checkPreliminari = self.preAnalysisChecks(soilList, profileList, permutationList, outputList)
-        if checkPreliminari is None:
-            return None
+
+        if single_thread:
+            checkPreliminari = self.preAnalysisChecks(soilList, profileList, permutationList, outputList)
+            if checkPreliminari is None:
+                return None
 
         analysisDB = {'CurveDB': self.curveDB, 'Discretization': [currentMaxFreq, currentWaveLength],
                       'Bedrock': [self.lineEdit_bedWeight.text(), self.lineEdit_bedVelocity.text(),
@@ -832,152 +846,247 @@ class SRAApp(QMainWindow, Ui_MainWindow):
         else:
             waitBar = None
 
-        all_profile_counter = 0
-        for fileIndex, batchObject in enumerate(batchObjectList):
+        if not self.checkBox_multithread.isChecked():  # Classic single thread analysis
+            all_profile_counter = 0
+            for fileIndex, batchObject in enumerate(batchObjectList):
 
-            # TEST CODE FOR MULTITHREADING
-            # Check per verifica tempi
-            current_time = time()
+                # TEST CODE FOR MULTITHREADING
+                # Check per verifica tempi
+                current_time = time()
 
-            numberClusters = batchObject.clusterNumber
-            numberProfiles = batchObject.profileNumber
+                numberClusters = batchObject.clusterNumber
+                numberProfiles = batchObject.profileNumber
 
-            # Batch analysis with clusters
-            if numberClusters > 0:
-                self.tableWidget_Permutations.show()
-                self.tableWidget_Profile.hide()
-                clustersOutputFolder = os.path.join(outputFolder, 'Clusters')
-                try:
-                    os.mkdir(clustersOutputFolder)
-                except FileExistsError:
-                    pass
+                # Batch analysis with clusters
+                if numberClusters > 0:
+                    self.tableWidget_Permutations.show()
+                    self.tableWidget_Profile.hide()
+                    clustersOutputFolder = os.path.join(outputFolder, 'Clusters')
+                    try:
+                        os.mkdir(clustersOutputFolder)
+                    except FileExistsError:
+                        pass
 
-                for clusterIndex in range(numberClusters):
-                    currentCluster, currentDepth, currentBrick = batchObject.getClusterInfo(clusterIndex)
-                    currentMotions = batchObject.getInputNames(clusterIndex, element_type='clusters')
-                    self.lineEdit_brickSize.setText(str(currentBrick))
-                    self.lineEdit_bedDepth.setText(str(currentDepth))
+                    for clusterIndex in range(numberClusters):
+                        currentCluster, currentDepth, currentBrick = batchObject.getClusterInfo(clusterIndex)
+                        currentMotions = batchObject.getInputNames(clusterIndex, element_type='clusters')
+                        self.lineEdit_brickSize.setText(str(currentBrick))
+                        self.lineEdit_bedDepth.setText(str(currentDepth))
 
-                    # Generating permutations for current cluster
-                    self.list2table(permutationTable=currentCluster)
-                    bedrockDepth = float(self.lineEdit_bedDepth.text())
-                    brickSize = float(self.lineEdit_brickSize.text())
-                    brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
-                    numberPermutations = SRALib.calcPermutations(brickProfile)[0]
+                        # Generating permutations for current cluster
+                        self.list2table(permutationTable=currentCluster)
+                        bedrockDepth = float(self.lineEdit_bedDepth.text())
+                        brickSize = float(self.lineEdit_brickSize.text())
+                        brickProfile = SRALib.makeBricks(self.tableWidget_Permutations, brickSize, bedrockDepth)
+                        numberPermutations = SRALib.calcPermutations(brickProfile)[0]
 
-                    waitBar = QProgressDialog("Generating {} permutations..".format(
-                        int(numberPermutations)), "Cancel", 0, 1)
-                    waitBar.setWindowTitle('NC92-Soil permutator')
-                    waitBar.setValue(0)
-                    waitBar.setMinimumDuration(0)
-                    waitBar.show()
-                    App.processEvents()
+                        waitBar = QProgressDialog("Generating {} permutations..".format(
+                            int(numberPermutations)), "Cancel", 0, 1)
+                        waitBar.setWindowTitle('NC92-Soil permutator')
+                        waitBar.setValue(0)
+                        waitBar.setMinimumDuration(0)
+                        waitBar.show()
+                        App.processEvents()
 
-                    profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
+                        profilePermutations = SRALib.calcPermutations(brickProfile, returnpermutations=True)
 
-                    waitBar.setValue(1)
-                    App.processEvents()
+                        waitBar.setValue(1)
+                        App.processEvents()
 
-                    for vsIndex in range(batchObject.vsNumber):
-                        currentSoil = batchObject.getSoilTable(vsIndex)
-                        self.list2table(soilTable=currentSoil)
-                        currentName = "{}-VS{}".format(
-                            batchObject.getElementName(clusterIndex, 'clusters'), vsIndex + 1)
-                        currentFolder = os.path.join(clustersOutputFolder, currentName)
-                        try:
-                            os.mkdir(currentFolder)
-                        except FileExistsError:
-                            pass
-
-                        # Running analysis
-                        batchOptions = {'batchType': 'permutations', 'inputSet': currentMotions,
-                                        'outputFolder': currentFolder, 'currentPrefix': currentName,
-                                        'profilePermutations': profilePermutations, 'vsList': None,
-                                        'curveStd': None}
-                        self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
-
-            # Batch analysis with profiles
-            if numberProfiles > 0:
-                if fileIndex == 0:
-                    self.tableWidget_Permutations.hide()
-                    self.tableWidget_Profile.show()
-
-                currentProfilesID = os.path.splitext(os.path.split(batchObject.filename)[1])[0]
-                self.label_profileProp.setText('Profile (from input file)')
-
-                profilesOutputFolder = os.path.join(outputFolder, 'Profiles - {}'.format(currentProfilesID))
-                try:
-                    os.mkdir(profilesOutputFolder)
-                except FileExistsError:
-                    pass
-
-                # Getting information about degradation curves std
-                curveStdVector = batchObject.getDegradationCurveStd()
-
-                # Updating waitbar
-                if waitBar:
-                    # waitBar.setLabelText('Processing profile {} in file {}'.format(
-                    #     currentName, os.path.basename(batchObject.filename)))
-                    waitBar.setLabelText('Processing file {}'.format(
-                        os.path.basename(batchObject.filename)))
-                    App.processEvents()
-
-                for profileIndex in range(numberProfiles):
-                    all_profile_counter += 1
-                    currentProfile, currentVsList, currentBedrockVs = batchObject.getProfileInfo(profileIndex)
-
-                    currentMotions = [inputName
-                                      for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
-                                      if inputName.strip() != ""]
-
-                    if len(currentMotions) == 0 or currentMotions[0].upper() == 'ALL':
-                        # No input specified, all the imported input will be used
-                        currentMotions = list(self.inputMotion.keys())
-
-                    # If VS is specified only one analysis is performed
-                    if all([element == -1 for element in currentVsList]):
-                        numberVs = batchObject.vsNumber
-                    else:
-                        numberVs = 1
-
-                    for vsIndex in range(numberVs):
-                        currentSoil = batchObject.getSoilTable(vsIndex)
-                        if numberVs == 1:
-                            currentName = "{}".format(batchObject.getElementName(profileIndex, 'profiles'))
-                        else:
+                        for vsIndex in range(batchObject.vsNumber):
+                            currentSoil = batchObject.getSoilTable(vsIndex)
+                            self.list2table(soilTable=currentSoil)
                             currentName = "{}-VS{}".format(
-                                batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
+                                batchObject.getElementName(clusterIndex, 'clusters'), vsIndex + 1)
+                            currentFolder = os.path.join(clustersOutputFolder, currentName)
+                            try:
+                                os.mkdir(currentFolder)
+                            except FileExistsError:
+                                pass
 
-                        currentFolder = os.path.join(profilesOutputFolder, currentName)
-                        try:
-                            os.mkdir(currentFolder)
-                        except FileExistsError:
-                            pass
+                            # Running analysis
+                            batchOptions = {'batchType': 'permutations', 'inputSet': currentMotions,
+                                            'outputFolder': currentFolder, 'currentPrefix': currentName,
+                                            'profilePermutations': profilePermutations, 'vsList': None,
+                                            'curveStd': None}
+                            self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
 
-                        # Updating bedrock Vs
-                        self.lineEdit_bedVelocity.setText(currentBedrockVs)
+                # Batch analysis with profiles
+                if numberProfiles > 0:
+                    if fileIndex == 0:
+                        self.tableWidget_Permutations.hide()
+                        self.tableWidget_Profile.show()
 
-                        self.list2table(currentSoil, profileTable=currentProfile)
-                        self.userModified = True
-                        self.profileChanged()
+                    currentProfilesID = os.path.splitext(os.path.split(batchObject.filename)[1])[0]
+                    self.label_profileProp.setText('Profile (from input file)')
 
-                        if self.checkBox_updatePlots.isChecked() and vsIndex == 0:
-                            self.makeProfile()
-                            App.processEvents()
+                    profilesOutputFolder = os.path.join(outputFolder, 'Profiles - {}'.format(currentProfilesID))
+                    try:
+                        os.mkdir(profilesOutputFolder)
+                    except FileExistsError:
+                        pass
 
-                        # Running analysis
-                        batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions,
-                                        'outputFolder': currentFolder,
-                                        'currentPrefix': currentName, 'profilePermutations': [currentProfile],
-                                        'vsList': currentVsList, 'curveStd': curveStdVector}
-                        self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+                    # Getting information about degradation curves std
+                    curveStdVector = batchObject.getDegradationCurveStd()
 
-                if waitBar:
-                    waitBar.setValue(all_profile_counter)
+                    # Updating waitbar
+                    if waitBar:
+                        # waitBar.setLabelText('Processing profile {} in file {}'.format(
+                        #     currentName, os.path.basename(batchObject.filename)))
+                        waitBar.setLabelText('Processing file {}'.format(
+                            os.path.basename(batchObject.filename)))
+                        App.processEvents()
 
-            print('File "{}" - {:.2f} s'.format(batchObject.filename, time()-current_time))
-            App.processEvents()
+                    for profileIndex in range(numberProfiles):
+                        all_profile_counter += 1
+                        currentProfile, currentVsList, currentBedrockVs = batchObject.getProfileInfo(profileIndex)
+
+                        currentMotions = [inputName
+                                          for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
+                                          if inputName.strip() != ""]
+
+                        if len(currentMotions) == 0 or currentMotions[0].upper() == 'ALL':
+                            # No input specified, all the imported input will be used
+                            currentMotions = list(self.inputMotion.keys())
+
+                        # If VS is specified only one analysis is performed
+                        if all([element == -1 for element in currentVsList]):
+                            numberVs = batchObject.vsNumber
+                        else:
+                            numberVs = 1
+
+                        for vsIndex in range(numberVs):
+                            currentSoil = batchObject.getSoilTable(vsIndex)
+                            if numberVs == 1:
+                                currentName = "{}".format(batchObject.getElementName(profileIndex, 'profiles'))
+                            else:
+                                currentName = "{}-VS{}".format(
+                                    batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
+
+                            currentFolder = os.path.join(profilesOutputFolder, currentName)
+                            try:
+                                os.mkdir(currentFolder)
+                            except FileExistsError:
+                                pass
+
+                            # Updating bedrock Vs
+                            self.lineEdit_bedVelocity.setText(currentBedrockVs)
+
+                            self.list2table(currentSoil, profileTable=currentProfile)
+                            self.userModified = True
+                            self.profileChanged()
+
+                            if self.checkBox_updatePlots.isChecked() and vsIndex == 0:
+                                self.makeProfile()
+                                App.processEvents()
+
+                            # Running analysis
+                            batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions,
+                                            'outputFolder': currentFolder,
+                                            'currentPrefix': currentName, 'profilePermutations': [currentProfile],
+                                            'vsList': currentVsList, 'curveStd': curveStdVector}
+                            self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions)
+
+                    if waitBar:
+                        waitBar.setValue(all_profile_counter)
+
+                print('File "{}" - {:.2f} s'.format(batchObject.filename, time()-current_time))
+                App.processEvents()
+        else:
+            self.shared_executor_counter = 0
+            self.lock = threading.Lock()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                param_tuples = zip([self] * len(batchObjectList),
+                                   enumerate(batchObjectList),
+                                   [outputFolder] * len(batchObjectList))
+                executor.map(self.single_batch_executor, param_tuples)
         QMessageBox.information(QMessageBox(), 'OK', 'Batch analysis has been correctly completed')
+
+    def single_batch_executor(self, parameters):
+        _, (fileIndex, batchObject), outputFolder = parameters
+        # TEST CODE FOR MULTITHREADING
+
+        numberProfiles = batchObject.profileNumber
+
+        if numberProfiles > 0:
+            self.shared_executor_counter += 1
+            currentProfilesID = os.path.splitext(os.path.split(batchObject.filename)[1])[0]
+
+            profilesOutputFolder = os.path.join(outputFolder, 'Profiles - {}'.format(currentProfilesID))
+            try:
+                os.mkdir(profilesOutputFolder)
+            except FileExistsError:
+                pass
+
+            # Getting information about degradation curves std
+            curveStdVector = batchObject.getDegradationCurveStd()
+
+            # # Updating waitbar
+            # if waitBar:
+            #     # waitBar.setLabelText('Processing profile {} in file {}'.format(
+            #     #     currentName, os.path.basename(batchObject.filename)))
+            #     waitBar.setLabelText('Processing file {}'.format(
+            #         os.path.basename(batchObject.filename)))
+            #     App.processEvents()
+
+            for profileIndex in range(numberProfiles):
+                currentProfile, currentVsList, currentBedrockVs = batchObject.getProfileInfo(profileIndex)
+
+                currentMotions = [inputName
+                                  for inputName in batchObject.getInputNames(profileIndex, element_type='profiles')
+                                  if inputName.strip() != ""]
+
+                if len(currentMotions) == 0 or currentMotions[0].upper() == 'ALL':
+                    # No input specified, all the imported input will be used
+                    currentMotions = list(self.inputMotion.keys())
+
+                # If VS is specified only one analysis is performed
+                if all([element == -1 for element in currentVsList]):
+                    numberVs = batchObject.vsNumber
+                else:
+                    numberVs = 1
+
+                for vsIndex in range(numberVs):
+                    currentSoil = batchObject.getSoilTable(vsIndex)
+                    if numberVs == 1:
+                        currentName = "{}".format(batchObject.getElementName(profileIndex, 'profiles'))
+                    else:
+                        currentName = "{}-VS{}".format(
+                            batchObject.getElementName(profileIndex, 'profiles'), vsIndex + 1)
+
+                    currentFolder = os.path.join(profilesOutputFolder, currentName)
+                    try:
+                        os.mkdir(currentFolder)
+                    except FileExistsError:
+                        pass
+
+                    # Updating bedrock Vs
+                    # self.lineEdit_bedVelocity.setText(currentBedrockVs)
+
+                    # self.list2table(currentSoil, profileTable=currentProfile)
+                    self.userModified = True
+                    # self.profileChanged()
+
+                    # if self.checkBox_updatePlots.isChecked() and vsIndex == 0:
+                    #     self.makeProfile()
+                    #     App.processEvents()
+
+                    # Running analysis
+                    batchOptions = {'batchType': 'profiles', 'inputSet': currentMotions,
+                                    'outputFolder': currentFolder,
+                                    'currentPrefix': currentName, 'profilePermutations': [currentProfile],
+                                    'vsList': currentVsList, 'curveStd': curveStdVector}
+                    self.runAnalysis(batchAnalysis=True, batchOptions=batchOptions, single_thread=False,
+                                     other_data=[currentSoil, currentProfile])
+
+            # if waitBar:
+            #     waitBar.setValue(self.shared_executor_counter)
+
+        if waitBar:
+            waitBar.setValue(self.shared_executor_counter / len(self.batchObject))
+
+        print('File "{}" - {:.2f} s'.format(batchObject.filename, time() - current_time))
+        App.processEvents()
 
     def list2table(self, soilTable=None, permutationTable=None, profileTable=None):
         if soilTable is not None:
@@ -1111,6 +1220,7 @@ class SRAApp(QMainWindow, Ui_MainWindow):
             App.processEvents()
 
         QMessageBox.information(QMessageBox(), 'OK', 'UHS spectra have been correctly saved')
+
     def makeStats(self):
         caller_obj = self.sender().objectName()
 
