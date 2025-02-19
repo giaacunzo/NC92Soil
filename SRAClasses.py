@@ -306,12 +306,19 @@ class StochasticAnalyzer:
         self.vsPolicy = currentStochastic['Bedrock Vs policy'][0]
         self.harmonicMeanDepth = int(currentStochastic['Harmonic mean depth\n[m]'][0])
 
-        # Check of random seed
-        if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0],
-                                                                           (int, np.int64, np.int32)):
-            self.randomSeed = None
-        else:
-            self.randomSeed = int(currentStochastic['Random seed'][0])
+        # # Check of random seed
+        # if np.isnan(currentStochastic['Random seed'][0]) or not isinstance(currentStochastic['Random seed'][0],
+        #                                                                    (int, np.int64, np.int32)):
+        #     self.randomSeed = None
+        # else:
+        #     self.randomSeed = int(currentStochastic['Random seed'][0])
+
+        try:
+            current_random_seed = int(currentStochastic['Random seed'][0])
+        except ValueError:
+            current_random_seed = None
+
+        self.randomSeed = current_random_seed
 
         # Merging with "Group definition" sheet
         # currentStochastic = self.merge_sheets(currentStochastic, currentGroupsDef)
